@@ -2,6 +2,9 @@
 
 ## 0.2.0
 
+- Add a provider-independent Meilisearch installation guide covering verified
+  downloads, systemd/managed hosting, role-key ownership and end-to-end checks.
+
 - Remove the provider-specific historical CSV importer and its dedicated tests;
   retain general-purpose relevance, latency and reviewed-signal tools.
 

@@ -29,6 +29,13 @@ during activation. See [the deployment decision](deployment-decision.md).
 
 ## 1. Prepare the search service
 
+For a complete provider-independent walkthrough, follow
+[Install Meilisearch for the plugin](meilisearch-installation.md). It covers a
+root-managed Linux/systemd VPS and a managed-hosting foreground service, verified
+downloads, service accounts, resource limits, protected keys and connection checks.
+If you complete its credential-provisioning steps, continue with step 3 below;
+do not create a second key set by repeating step 2 into the same directory.
+
 Keep Meilisearch behind loopback, or use a protected Unix socket when web PHP and
 the provider-managed daemon have different network namespaces. Never publish a
 Meilisearch API or the master key through a storefront URL or `.htaccess` proxy.

@@ -15,6 +15,9 @@ service, validates compatibility during indexing and owns its document/index
 configuration. Composer declares the Shopware PHP requirements, not an operating
 system process or binary package.
 
+For concrete commands for both supported service models, see the
+[Meilisearch installation guide](meilisearch-installation.md).
+
 ## Responsibility split
 
 | Component | Responsibilities |

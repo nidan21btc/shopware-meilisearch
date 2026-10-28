@@ -31,7 +31,8 @@ there is no cloud fallback.
 
 | Guide | Contents |
 | --- | --- |
-| [Installation](docs/installation.md) | Requirements, service setup, credentials, installation and upgrades |
+| [Meilisearch installation](docs/meilisearch-installation.md) | Step-by-step Linux VPS and managed-hosting service setup, keys and acceptance checks |
+| [Plugin installation](docs/installation.md) | Requirements, credentials, plugin installation and upgrades |
 | [Configuration](docs/configuration.md) | Environment variables, backend settings, fields and synthetic examples |
 | [Architecture](docs/architecture.md) | Request flow, ranking, language handling, indexing and code map |
 | [Deployment decision](docs/deployment-decision.md) | Why Meilisearch remains a separately managed runtime requirement |
