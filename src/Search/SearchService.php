@@ -208,7 +208,7 @@ final class SearchService
             $featured = array_values(array_intersect($configured, $candidates));
             $candidates = array_values(array_unique(array_merge($featured, $candidates)));
         }
-        $empty = ['products' => [], 'names' => [], 'unnamed' => [], 'variantQuantities' => [], 'variantOptions' => [], 'variantNumbers' => [], 'referenceUnits' => [], 'manufacturers' => [], 'categories' => [], 'total' => 0, 'page' => $input->page, 'pages' => 0, 'priceRange' => null, 'truncated' => false, 'featured' => false, 'broadened' => false, 'quantityFallback' => false, 'orthographyFallback' => false, 'hasSimilar' => false, 'facetCountsMayChange' => false];
+        $empty = ['products' => [], 'names' => [], 'productManufacturers' => [], 'unnamed' => [], 'variantQuantities' => [], 'variantOptions' => [], 'variantNumbers' => [], 'referenceUnits' => [], 'manufacturers' => [], 'categories' => [], 'total' => 0, 'page' => $input->page, 'pages' => 0, 'priceRange' => null, 'truncated' => false, 'featured' => false, 'broadened' => false, 'quantityFallback' => false, 'orthographyFallback' => false, 'hasSimilar' => false, 'facetCountsMayChange' => false];
         if ($candidates === []) {
             return $empty;
         }
@@ -353,6 +353,7 @@ final class SearchService
         $pageIds = array_slice($visibleIds, ($page - 1) * SearchInput::PAGE_SIZE, SearchInput::PAGE_SIZE);
         $products = [];
         $names = [];
+        $productManufacturers = [];
         $variantQuantities = [];
         $variantOptions = [];
         $variantNumbers = [];
@@ -378,6 +379,8 @@ final class SearchService
                 if (is_string($name) && trim($name) !== '') {
                     $products[] = $product;
                     $names[$product->getId()] = $name;
+                    $manufacturer = LanguageText::field($product->getManufacturer(), $context->getLanguageId(), 'name');
+                    if (is_string($manufacturer) && trim($manufacturer) !== '') $productManufacturers[$product->getId()] = trim($manufacturer);
                     $quantity = VariantQuantityLabel::forProduct($product, $name, $context->getLanguageId(), $context->getLanguageInfo()->localeCode, $quantityUnits);
                     if ($quantity !== null) $variantQuantities[$product->getId()] = $quantity;
                     $options = VariantOptionLabels::forProduct($product, $name, $context->getLanguageId(), $quantity);
@@ -396,6 +399,7 @@ final class SearchService
         return [
             'products' => $products,
             'names' => $names,
+            'productManufacturers' => $productManufacturers,
             'unnamed' => $unnamed,
             'variantQuantities' => $variantQuantities,
             'variantOptions' => $variantOptions,

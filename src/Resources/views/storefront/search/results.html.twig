@@ -90,6 +90,7 @@
                             {% sw_thumbnails 'el-search-product' with {media:product.cover.media, sizes:{default:'240px'}, attributes:{alt:name, title:name, loading:'lazy'}} %}
                         {% else %}{% sw_icon 'placeholder' style {size:'lg'} %}{% endif %}
                     </div>
+                    {% if result.productManufacturers[product.id] is defined %}<span class="el-search__manufacturer">{{ result.productManufacturers[product.id] }}</span>{% endif %}
                     <span class="el-search__name">{{ name }}</span>
                     {% if result.variantQuantities[product.id] is defined %}<small class="el-search__variant-quantity">{{ result.variantQuantities[product.id] }}</small>{% endif %}
                     {% set variantOptions = result.variantOptions[product.id]|default([]) %}

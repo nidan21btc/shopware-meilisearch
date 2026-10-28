@@ -59,6 +59,7 @@
 .el-search__product-link:hover { color:var(--el-gold); }
 .el-search__image { position:relative; height:180px; display:flex; justify-content:center; align-items:center; }
 .el-search__image img { position:absolute; inset:0; width:100%; height:100%; max-width:100%; max-height:100%; object-fit:contain; }
+.el-search__manufacturer { color:#777; font-size:12px; line-height:1.3; margin-bottom:-8px; overflow-wrap:anywhere; }
 .el-search__name { font-size:14px; line-height:1.5; min-height:42px; }
 @media(min-width:1251px) { .el-search__name { font-size:16px; line-height:1.4; min-height:44.8px; overflow-wrap:anywhere; } }
 .el-search__variant-quantity,.el-search__variant-options { color:#555; font-size:12px; line-height:1.3; margin-top:-8px; overflow-wrap:anywhere; }
@@ -69,7 +70,7 @@
 .el-search .product-price { font-size:14px; }
 .el-search .product-price-unit { margin-bottom:8px; font-size:11px; }
 .el-search__price { min-width:0; font-size:14px; }
-.el-search__current-price { font-weight:600; white-space:nowrap; }
+.el-search__current-price { font-size:16px; font-weight:600; white-space:nowrap; }
 .el-search__price small { display:block; font-size:10px; line-height:1.2; margin-top:4px; }
 .el-search__list-price, .el-search__regulation-price { display:block; font-size:11px; }
 .el-search__tax-info { margin:12px 0; font-size:12px; }
