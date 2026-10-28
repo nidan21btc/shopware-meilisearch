@@ -15,13 +15,14 @@ use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 #[AsMessageHandler(handles: ReindexTask::class)]
 final class ReindexTaskHandler extends ScheduledTaskHandler
 {
-    public function __construct(EntityRepository $repository, LoggerInterface $logger, private readonly IndexCommand $command, private readonly DirtyState $state, private readonly string $lockDirectory)
+    public function __construct(EntityRepository $repository, LoggerInterface $logger, private readonly IndexCommand $command, private readonly DirtyState $state, private readonly string $lockDirectory, private readonly \ShopwareMeilisearch\Search\PopularSearches $popularSearches)
     {
         parent::__construct($repository, $logger);
     }
 
     public function run(): void
     {
+        try { $this->popularSearches->purge(); } catch (\Throwable $error) { $this->exceptionLogger->warning('Popular search cleanup failed', ['exceptionClass' => $error::class]); }
         if (!is_dir($this->lockDirectory) && !@mkdir($this->lockDirectory, 0700, true) && !is_dir($this->lockDirectory)) throw new \RuntimeException('Cannot create rebuild lock directory.');
         $lock = fopen($this->lockDirectory . '/rebuild-all.lock', 'c');
         if ($lock === false) throw new \RuntimeException('Cannot open rebuild lock.');

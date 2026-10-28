@@ -27,6 +27,7 @@ class ShopwareMeilisearch extends Plugin
         if (!$uninstallContext->keepUserData()) {
             $this->container->get(Connection::class)->executeStatement('DROP TABLE IF EXISTS `shopware_meilisearch_state`');
             $this->container->get(Connection::class)->executeStatement('DROP TABLE IF EXISTS `shopware_meilisearch_connection`');
+            $this->container->get(Connection::class)->executeStatement('DROP TABLE IF EXISTS `shopware_meilisearch_popular_query`');
         }
     }
 }

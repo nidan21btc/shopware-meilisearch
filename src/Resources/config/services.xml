@@ -44,11 +44,13 @@
             <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
             <argument type="service" id="logger"/>
         </service>
+        <service id="ShopwareMeilisearch\Search\PopularSearches"><argument type="service" id="Doctrine\DBAL\Connection"/></service>
         <service id="ShopwareMeilisearch\Controller\SearchController" public="true">
             <argument type="service" id="ShopwareMeilisearch\Search\SearchService"/>
             <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
             <argument type="service" id="logger"/>
             <argument type="service" id="ShopwareMeilisearch\Security\SearchRequestGuard"/>
+            <argument type="service" id="ShopwareMeilisearch\Search\PopularSearches"/>
             <call method="setContainer"><argument type="service" id="service_container"/></call>
             <tag name="controller.service_arguments"/>
         </service>
@@ -140,6 +142,7 @@
             <argument type="service" id="ShopwareMeilisearch\Command\IndexCommand"/>
             <argument type="service" id="ShopwareMeilisearch\Search\DirtyState"/>
             <argument>%kernel.project_dir%/var/shopware-meilisearch</argument>
+            <argument type="service" id="ShopwareMeilisearch\Search\PopularSearches"/>
             <tag name="messenger.message_handler"/>
         </service>
     </services>
