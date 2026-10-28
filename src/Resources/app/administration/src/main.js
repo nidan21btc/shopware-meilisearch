@@ -214,7 +214,7 @@ Shopware.Component.register('sw-meilisearch-quantity-units', {
         <template v-if="parsed.valid">
           <p class="sw-meilisearch-config__help">Ordne vorhandene Shopware-Einheiten einem Suchsymbol zu. Mengen werden für die Suche auch zwischen ml und l sowie g und kg umgerechnet.</p>
           <p v-if="!entries.length" class="sw-meilisearch-config__help">Keine Einheiten zugeordnet. Die normale Suche funktioniert weiterhin.</p>
-          <div v-for="entry in entries" :key="entry.id" class="sw-meilisearch-config__item sw-meilisearch-config__unit">
+          <div v-for="entry in entries" :key="entry.id" class="sw-meilisearch-config__item sw-meilisearch-config__unit sw-meilisearch-config__unit-item">
             <sw-entity-single-select entity="unit" :value="entry.id" :disabled="true" label="Shopware-Einheit" />
             <span>1 Einheit = {{ entry.factor }} {{ entry.symbol }}</span>
             <sw-button :disabled="disabled" :aria-label="'Einheitenzuordnung entfernen'" @click="remove(entry.id)">Entfernen</sw-button>
