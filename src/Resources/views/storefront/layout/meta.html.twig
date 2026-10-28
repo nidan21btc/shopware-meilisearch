@@ -1,0 +1,8 @@
+{% sw_extends '@Storefront/storefront/layout/meta.html.twig' %}
+{% block layout_head_stylesheet %}
+    {{ parent() }}
+    {% if config('ShopwareMeilisearch.config.enabled') %}
+        <link rel="stylesheet" href="{{ asset('bundles/shopwaremeilisearch/storefront/css/search.css') }}">
+        <script type="module" src="{{ asset('bundles/shopwaremeilisearch/storefront/js/search.js') }}"></script>
+    {% endif %}
+{% endblock %}

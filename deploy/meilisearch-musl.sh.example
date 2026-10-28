@@ -1,0 +1,12 @@
+#!/bin/sh
+# EXAMPLE ONLY. Set these paths to the matching files from the same verified
+# official Alpine image. Keep this wrapper and the runtime protected from writes
+# by anyone other than the service administrator.
+set -eu
+
+SEARCH_HOME=/home/REPLACE_USER/shopware-meilisearch
+LOADER="$SEARCH_HOME/runtime/ld-musl-x86_64.so.1"
+LIBRARY_PATH="$SEARCH_HOME/runtime"
+MEILISEARCH="$SEARCH_HOME/bin/meilisearch-alpine"
+
+exec "$LOADER" --library-path "$LIBRARY_PATH" "$MEILISEARCH" "$@"

@@ -1,0 +1,11 @@
+<?php declare(strict_types=1);
+require __DIR__ . '/../src/Search/Discovery.php';
+require __DIR__ . '/../src/Search/QuantityUnits.php';
+require __DIR__ . '/../src/Search/IndexFields.php';
+use ShopwareMeilisearch\Search\Discovery;
+use ShopwareMeilisearch\Search\QuantityUnits;
+use ShopwareMeilisearch\Search\IndexFields;
+if (Discovery::suggestions('', 'de-DE') !== [] || Discovery::featured('', 'de-DE') !== [] || QuantityUnits::parse('') !== []) throw new RuntimeException('Unexpected installation defaults');
+if (Discovery::suggestions('{"de-DE":["blume"],"en-GB":["flower"]}', 'en-GB') !== ['flower']) throw new RuntimeException('Language selection failed');
+if (!in_array('customFields.example', IndexFields::parse('["name","customFields.example"]'), true)) throw new RuntimeException('Custom fields unavailable');
+echo "Sanitized defaults and configurable fields verified.\n";

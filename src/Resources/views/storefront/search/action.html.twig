@@ -1,0 +1,23 @@
+{% set id = product.id %}
+{% set isAvailable = not product.isCloseout or (product.stock >= product.minPurchase) %}
+{% set displayFrom = product.calculatedPrices.count > 1 %}
+<div class="product-action">
+    {% if isAvailable and not displayFrom and product.childCount <= 0 and config('core.listing.allowBuyInListing') %}
+        <form action="{{ path('frontend.checkout.line-item.add') }}" method="post" class="buy-widget" data-add-to-cart="true">
+            <input type="hidden" name="redirectTo" value="frontend.detail.page">
+            <input type="hidden" name="redirectParameters" data-redirect-parameters="true" value="{{ {productId:id}|json_encode }}">
+            <input type="hidden" name="lineItems[{{ id }}][id]" value="{{ id }}">
+            <input type="hidden" name="lineItems[{{ id }}][referencedId]" value="{{ id }}">
+            <input type="hidden" name="lineItems[{{ id }}][type]" value="product">
+            <input type="hidden" name="lineItems[{{ id }}][stackable]" value="1">
+            <input type="hidden" name="lineItems[{{ id }}][removable]" value="1">
+            <input type="hidden" name="lineItems[{{ id }}][quantity]" value="{{ product.minPurchase }}">
+            <input type="hidden" name="product-name" value="{{ name }}">
+            <button class="btn btn-buy el-search__cart" type="submit" aria-label="{{ 'listing.boxAddProduct'|trans|striptags }}: {{ name }}" title="{{ 'listing.boxAddProduct'|trans|striptags }}">
+                {% sw_icon 'cart' style {size:'sm'} %}
+            </button>
+        </form>
+    {% else %}
+        <a href="{{ seoUrl('frontend.detail.page', {productId:id}) }}" class="btn btn-light btn-detail">{{ 'listing.boxProductDetails'|trans|sw_sanitize }}</a>
+    {% endif %}
+</div>

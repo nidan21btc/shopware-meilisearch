@@ -1,0 +1,9 @@
+{% set taxInformation = context.taxState == 'gross' ? 'general.grossTaxInformation' : 'general.netTaxInformation' %}
+{% set shippingPage = config('core.basicInformation.shippingPaymentInfoPage') %}
+<p class="el-search__tax-info">*
+    {% if shippingPage %}
+        <a href="{{ path('frontend.cms.page.full', {id:shippingPage}) }}">{{ taxInformation|trans|sw_sanitize }}</a>
+    {% else %}
+        {{ taxInformation|trans|sw_sanitize }}
+    {% endif %}
+</p>

@@ -1,0 +1,31 @@
+{% sw_extends '@Storefront/storefront/base.html.twig' %}
+
+{% block base_body_script %}
+    {{ parent() }}
+    {% if config('ShopwareMeilisearch.config.enabled') %}
+        <dialog class="el-search" data-el-search data-endpoint="{{ path('frontend.shopware.meilisearch') }}" aria-label="{{ 'elSearch.search'|trans }}" data-loading="{{ 'elSearch.loading'|trans }}" data-error="{{ 'elSearch.unavailable'|trans }}" data-locale="{{ context.languageInfo.localeCode }}" data-voice-start="{{ 'elSearch.voiceStart'|trans }}" data-voice-stop="{{ 'elSearch.voiceStop'|trans }}" data-voice-listening="{{ 'elSearch.voiceListening'|trans }}" data-voice-error="{{ 'elSearch.voiceUnavailable'|trans }}">
+            <header class="el-search__header">
+                <a href="{{ path('frontend.home.page') }}" class="el-search__logo" aria-label="{{ 'header.logoLink'|trans|striptags }}">
+                    {% if theme_config('sw-logo-desktop') %}<img src="{{ theme_config('sw-logo-desktop')|sw_encode_url }}" alt="{{ 'header.logoLink'|trans|striptags }}">{% endif %}
+                </a>
+                <button type="button" data-el-close class="el-search__back" aria-label="{{ 'elSearch.close'|trans }}">←</button>
+                <form data-el-query-form class="el-search__searchbox" role="search">
+                    <label for="el-search-query" class="visually-hidden">{{ 'elSearch.search'|trans }}</label>
+                    {% sw_icon 'search' style {size:'sm'} %}
+                    <input id="el-search-query" type="search" autocomplete="off" maxlength="150" placeholder="{{ 'elSearch.placeholder'|trans }}" data-el-query>
+                    <button type="button" data-el-clear class="el-search__clear" aria-label="{{ 'elSearch.clearQuery'|trans }}" hidden>×</button>
+                    <button type="button" data-el-voice class="el-search__voice" aria-label="{{ 'elSearch.voiceStart'|trans }}" aria-pressed="false" hidden>{% sw_icon 'micophone' style {size:'sm'} %}</button>
+                    <button type="submit" class="visually-hidden">{{ 'elSearch.search'|trans }}</button>
+                </form>
+                <button type="button" data-el-close class="el-search__close" aria-label="{{ 'elSearch.close'|trans }}">{% sw_icon 'x' %}</button>
+            </header>
+            <p data-el-status class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></p>
+            <p data-el-voice-notice class="el-search__voice-notice" role="status" hidden></p>
+            <div data-el-results class="el-search__body"></div>
+            <div data-el-network-error hidden class="el-search__error">
+                <p>{{ 'elSearch.unavailable'|trans }}</p>
+                <button type="button" data-el-retry>{{ 'elSearch.retry'|trans }}</button>
+            </div>
+        </dialog>
+    {% endif %}
+{% endblock %}

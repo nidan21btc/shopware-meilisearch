@@ -1,0 +1,519 @@
+<?php declare(strict_types=1);
+
+// Run from any directory: php custom/plugins/ShopwareMeilisearch/tests/run.php
+require (getenv('SHOPWARE_ROOT') ?: dirname(__DIR__, 4)) . '/vendor/autoload.php';
+spl_autoload_register(static function (string $class): void {
+    $prefix = 'ShopwareMeilisearch\\';
+    if (str_starts_with($class, $prefix)) {
+        require dirname(__DIR__) . '/src/' . str_replace('\\', '/', substr($class, strlen($prefix))) . '.php';
+    }
+});
+
+use ShopwareMeilisearch\Command\AuditIndexFieldsCommand;
+use ShopwareMeilisearch\Search\DocumentBuilder;
+use ShopwareMeilisearch\Search\Engine;
+use Shopware\Core\Content\Category\CategoryCollection;
+use Shopware\Core\Content\Category\CategoryEntity;
+use Shopware\Core\Content\Category\Aggregate\CategoryTranslation\CategoryTranslationCollection;
+use Shopware\Core\Content\Category\Aggregate\CategoryTranslation\CategoryTranslationEntity;
+use Shopware\Core\Content\Product\Aggregate\ProductTranslation\ProductTranslationCollection;
+use Shopware\Core\Content\Product\Aggregate\ProductTranslation\ProductTranslationEntity;
+use ShopwareMeilisearch\Search\LanguageText;
+use ShopwareMeilisearch\Search\IndexFields;
+use ShopwareMeilisearch\Search\SearchInput;
+use ShopwareMeilisearch\Search\Discovery;
+use ShopwareMeilisearch\Search\SearchService;
+use ShopwareMeilisearch\Search\FeedbackConfig;
+use ShopwareMeilisearch\Search\TypoRelevance;
+use ShopwareMeilisearch\Search\PartialMatches;
+use ShopwareMeilisearch\Search\OrthographicFallback;
+use ShopwareMeilisearch\Search\ShortQueryPrecision;
+use ShopwareMeilisearch\Search\MultiwordPrecision;
+use ShopwareMeilisearch\Search\QueryClickFeedback;
+use ShopwareMeilisearch\Search\QuantityUnits;
+use ShopwareMeilisearch\Search\QuantityRelevance;
+use ShopwareMeilisearch\Search\VariantQuantityLabel;
+use ShopwareMeilisearch\Search\VariantOptionLabels;
+use ShopwareMeilisearch\Search\NameAliases;
+use ShopwareMeilisearch\Search\ReferenceUnitLabels;
+use ShopwareMeilisearch\Search\IdentifierFallback;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
+use Shopware\Core\Content\Product\SalesChannel\SalesChannelProductEntity;
+use Shopware\Core\System\Unit\UnitEntity;
+use Shopware\Core\System\Unit\Aggregate\UnitTranslation\UnitTranslationEntity;
+use Shopware\Core\System\Unit\Aggregate\UnitTranslation\UnitTranslationCollection;
+use Shopware\Core\Content\Property\Aggregate\PropertyGroupOption\PropertyGroupOptionEntity;
+use Shopware\Core\Content\Property\Aggregate\PropertyGroupOption\PropertyGroupOptionCollection;
+use Shopware\Core\Content\Property\Aggregate\PropertyGroupOptionTranslation\PropertyGroupOptionTranslationEntity;
+use Shopware\Core\Content\Property\Aggregate\PropertyGroupOptionTranslation\PropertyGroupOptionTranslationCollection;
+use Symfony\Component\HttpClient\MockHttpClient;
+use Symfony\Component\HttpClient\Response\MockResponse;
+
+$checks = 0;
+function check(bool $condition, string $message): void
+{
+    global $checks;
+    if (!$condition) {
+        throw new RuntimeException($message);
+    }
+    ++$checks;
+}
+
+$channel = str_repeat('a', 32);
+$language = str_repeat('b', 32);
+check(PartialMatches::terms('Test Blume') === ['Test', 'Blume'], 'Partial matching recognizes separate language-local words');
+check(PartialMatches::terms('AB-123 Blüten') === [] && PartialMatches::terms('Bach') === [] && PartialMatches::terms('eins zwei drei vier fünf sechs') === [], 'Partial matching excludes identifiers, single words and long queries');
+check(IdentifierFallback::isCode('FE062M') && IdentifierFallback::isCode('9781234567890') && IdentifierFallback::isCode('AB-123'), 'Recognize exact product identifiers');
+check(!IdentifierFallback::isCode('flower') && !IdentifierFallback::isCode('FE062M flowers') && !IdentifierFallback::isCode('123?x') && !IdentifierFallback::isCode(str_repeat('1', 65)), 'Identifier fallback excludes natural-language, malformed and overlong queries');
+check(IdentifierFallback::exactCode('fe062m', 'FE062M') && IdentifierFallback::exactCode("A\u{0308}12", 'Ä12'), 'Identifier lookup accepts case and canonical Unicode equivalents');
+check(!IdentifierFallback::exactCode('A12', 'Ä12') && !IdentifierFallback::exactCode('FE062', 'FE062M') && !IdentifierFallback::exactCode('FE062M', null), 'Identifier lookup rejects accent folding, prefixes and absent values');
+check(SearchService::sortByDisplayName(['b', 'a', 'c'], ['a' => 'AB123', 'b' => 'Blüte', 'c' => 'Zitrone'], 'de-DE') === ['a', 'b', 'c'], 'Sort displayed labels without using another language');
+$one = str_repeat('1', 32); $two = str_repeat('2', 32); $three = str_repeat('3', 32);
+check(PartialMatches::append([$one], [[['id' => $one], ['id' => $three]], [['id' => $two], ['id' => 'invalid']]]) === [$one, $two, $three], 'Partial matches preserve existing order, alternate terms, and remove duplicate or invalid IDs');
+check(!PartialMatches::hideParent($one, $two, [$one => true]), 'A partial variant must not hide a primary parent');
+check(PartialMatches::hideParent($one, $two, [$one => true, $two => true]) && PartialMatches::hideParent($one, $two, []), 'Ordinary parent and variant deduplication remains active');
+check(OrthographicFallback::german('Blueten', 'de-DE') === 'blüten', 'German spelling fallback restores an umlaut');
+check(OrthographicFallback::german('Fuss', 'de-AT') === 'fuß', 'German spelling fallback restores sharp s');
+check(OrthographicFallback::german('Blueten', 'en-GB') === null, 'German spelling fallback does not cross languages');
+check(OrthographicFallback::german('AB123-ue', 'de-DE') === null && OrthographicFallback::german('ue', 'de-DE') === null, 'Article numbers and very short queries are not rewritten');
+$shortHits = [];
+for ($n = 0; $n < 20; ++$n) {
+    $shortHits[] = ['id' => str_pad(dechex($n), 32, '0', STR_PAD_LEFT), '_rankingScoreDetails' => ['typo' => ['typoCount' => 0]]];
+}
+$shortHits[] = ['id' => str_repeat('f', 32), '_rankingScoreDetails' => ['typo' => ['typoCount' => 1]]];
+check(count(ShortQueryPrecision::exactIds('bach', $shortHits)) === 20, 'Short word separates precise matches from typo matches');
+check(ShortQueryPrecision::exactIds('ba', $shortHits) === null && ShortQueryPrecision::exactIds('ab12', $shortHits) === null, 'Short-query precision excludes short text and identifiers');
+check(ShortQueryPrecision::exactIds('bach', array_slice($shortHits, 1)) === null && ShortQueryPrecision::exactIds('bach', [['id' => $one]]) === null, 'Keep typo matches when precise results or metadata are insufficient');
+$oneExactAndTypo = [$shortHits[0], $shortHits[20]];
+check(ShortQueryPrecision::exactIds('rose', $oneExactAndTypo) === null && count(ShortQueryPrecision::exactIds('rose', $oneExactAndTypo, 1)) === 1, 'English short queries can retain exact hits before optional typo matches');
+check(ShortQueryPrecision::exactIds('rose', [$shortHits[20]], 1) === null, 'Retain typo matches if no exact hit exists');
+check(DocumentBuilder::settings([], IndexFields::DEFAULTS, 'en-GB')['typoTolerance']['minWordSizeForTypos'] === ['oneTypo' => 4, 'twoTypos' => 9], 'English permits one typo at four letters without loosening two-typo tolerance');
+check(SearchInput::fromRequest(Request::create('/?q=bach&similar=1'))->includeSimilar, 'Similar-result option is parsed');
+check(SearchInput::fromRequest(Request::create('/?q=bach'), true)->includeSimilar, 'Locale may choose expanded results by default');
+check(!SearchInput::fromRequest(Request::create('/?q=bach&similar=0'), true)->includeSimilar, 'Explicit choice can hide default similar results');
+check(SearchInput::fromRequest(Request::create('/?q=bach+blueten'))->includeSimilar, 'Multiword searches include weaker matches by default');
+check(!SearchInput::fromRequest(Request::create('/?q=bach+blueten&similar=0'))->includeSimilar, 'Multiword weaker matches may be explicitly hidden');
+$multiHits = [];
+for ($i = 0; $i < 21; ++$i) $multiHits[] = ['id' => sprintf('%032x', $i + 1), '_rankingScoreDetails' => ['typo' => ['typoCount' => $i === 20 ? 2 : $i % 2]]];
+check(count(MultiwordPrecision::strongIds('Test Blume', $multiHits) ?? []) === 20, 'Multiword precision keeps zero- and one-typo results');
+check(MultiwordPrecision::strongIds('Test Blume', array_slice($multiHits, 0, 20)) === null, 'Do not offer a narrower view without weaker matches');
+check(MultiwordPrecision::strongIds('AB-123 Blüten', $multiHits) === null, 'Do not apply natural-language precision to product codes');
+$composed = SearchInput::fromRequest(new Request(['q' => "café"]));
+$decomposed = SearchInput::fromRequest(new Request(['q' => "cafe\u{0301}"]));
+check($composed->query === $decomposed->query && $decomposed->query === 'café', 'Equivalent accented input uses the same canonical query');
+check(count(ShortQueryPrecision::exactIds($decomposed->query, $shortHits)) === 20, 'Canonical four-letter input receives the same short-word precision');
+$rankingHit = static fn (string $id, int $words, int $typos, float $attribute): array => [
+    'id' => $id, '_rankingScoreDetails' => [
+        'words' => ['matchingWords' => $words], 'typo' => ['typoCount' => $typos],
+        'proximity' => ['score' => 1.0], 'attribute' => ['score' => $attribute],
+    ],
+];
+$ranking = [$rankingHit('exact-low', 2, 0, 0.2), $rankingHit('exact-high', 2, 0, 0.9),
+    $rankingHit('typo-low', 2, 1, 0.2), $rankingHit('typo-high', 2, 1, 0.9),
+    $rankingHit('typo-tie', 2, 1, 0.9), $rankingHit('fewer-words', 1, 1, 1.0)];
+check(array_column(TypoRelevance::reorder($ranking), 'id') === ['exact-low', 'exact-high', 'typo-high', 'typo-tie', 'typo-low', 'fewer-words'], 'Reorder only equally matched typo buckets; preserve ties and exact matches');
+$incompleteRanking = [$ranking[0], ['id' => 'missing']];
+check(TypoRelevance::reorder($incompleteRanking) === $incompleteRanking, 'Preserve engine ordering when score details are missing');
+check(Engine::indexName($channel, $language) === 'shopware_' . $channel . '_' . $language, 'Index isolation');
+check(AuditIndexFieldsCommand::fieldValue(['customFields' => ['example' => ['one', 'two']]], 'customFields.example') === ['one', 'two'], 'Read nested indexed custom fields');
+check(AuditIndexFieldsCommand::fieldValue(['customFields' => []], 'customFields.example') === null, 'Missing indexed field remains absent');
+check(AuditIndexFieldsCommand::hasText(['', null, '  ', '0']), 'Count zero as an indexed text value');
+check(!AuditIndexFieldsCommand::hasText(['', null, '  ']), 'Do not count empty indexed values');
+
+try {
+    Engine::indexName('../other', $language);
+    throw new RuntimeException('Invalid index scope accepted');
+} catch (InvalidArgumentException) {
+    ++$checks;
+}
+
+$product = new SalesChannelProductEntity();
+$product->setId(str_repeat('c', 32));
+$product->setParentId(str_repeat('d', 32));
+$product->setProductNumber('EL-001');
+$product->setTranslated(['name' => 'Bachblüten Rescue', 'description' => '<p>Ruhe &amp; Gelassenheit</p>', 'keywords' => 'Notfall']);
+$product->setCustomSearchKeywords(['Rescuetropfen']);
+$translation = new ProductTranslationEntity();
+$translation->setUniqueIdentifier('product-de');
+$translation->setLanguageId($language);
+$translation->setName('Bachblüten Rescue');
+$translation->setDescription('<p>Ruhe &amp; Gelassenheit</p>');
+$translation->setKeywords('Notfall');
+$translation->setCustomSearchKeywords(['Rescuetropfen']);
+$product->setTranslations(new ProductTranslationCollection([$translation]));
+$unit = new UnitEntity();
+$unitTranslation = new UnitTranslationEntity();
+$unitTranslation->setUniqueIdentifier('unit-de');
+$unitTranslation->setLanguageId($language);
+$unitTranslation->setShortCode('ml');
+$unit->setTranslations(new UnitTranslationCollection([$unitTranslation]));
+$product->setUnit($unit);
+$unitDocument = (new DocumentBuilder())->build($product, $language, ['name', 'unitShortCode']);
+check($unitDocument['unitShortCode'] === 'ml', 'Configured unit abbreviation must use the current translation');
+check(LanguageText::field($unit, str_repeat('f', 32), 'shortCode') === null, 'Unit abbreviation must not fall back across languages');
+$active = new CategoryEntity();
+$active->setId(str_repeat('e', 32));
+$active->setActive(true);
+$active->setTranslated(['name' => 'Blütenessenzen']);
+$categoryTranslation = new CategoryTranslationEntity();
+$categoryTranslation->setUniqueIdentifier('category-de');
+$categoryTranslation->setLanguageId($language);
+$categoryTranslation->setName('Blütenessenzen');
+$active->setTranslations(new CategoryTranslationCollection([$categoryTranslation]));
+$inactive = new CategoryEntity();
+$inactive->setId(str_repeat('f', 32));
+$inactive->setActive(false);
+$inactive->setTranslated(['name' => 'Interne Kategorie']);
+$product->setCategories(new CategoryCollection([$active, $inactive]));
+$document = (new DocumentBuilder())->build($product, $language);
+check($document['name'] === 'Bachblüten Rescue', 'Use translated product name');
+check($document['groupId'] === str_repeat('d', 32), 'Group sibling variants');
+check($document['description'] === 'Ruhe & Gelassenheit', 'Strip description HTML');
+check($document['keywords'] === 'Notfall' && $document['customSearchKeywords'] === ['Rescuetropfen'], 'Include custom search keywords separately');
+check($document['categories'] === ['Blütenessenzen'], 'Exclude inactive categories');
+check((new DocumentBuilder())->build($product, $channel) === null, 'Never index a fallback name in another language');
+$unnamedTranslation = new ProductTranslationEntity();
+$unnamedTranslation->setUniqueIdentifier('product-unnamed');
+$unnamedTranslation->setLanguageId(str_repeat('9', 32));
+$unnamedTranslation->setKeywords('local-only-keyword');
+$product->getTranslations()->add($unnamedTranslation);
+$unnamedDocument = (new DocumentBuilder())->build($product, str_repeat('9', 32), ['name', 'keywords']);
+check(($unnamedDocument['unnamed'] ?? false) === true && $unnamedDocument['keywords'] === 'local-only-keyword', 'Unnamed product can use selected current-language text');
+check((new DocumentBuilder())->build($product, str_repeat('9', 32), ['name', 'categories', 'productNumber']) === null, 'Generic fields and identifiers do not qualify unnamed documents');
+$unnamedTranslation->setName('<style>hiddenname</style>');
+check((new DocumentBuilder())->build($product, str_repeat('9', 32), ['name', 'categories', 'productNumber']) === null, 'Invisible name markup cannot qualify a generic unnamed product');
+$unnamedTranslation->setName(null);
+check((new DocumentBuilder())->build($product, str_repeat('9', 32), ['name'], 0, ['local-hint'])['unnamed'] === true, 'Explicit local query hint can qualify unnamed document');
+$unnamedTranslation->setDescription('<p> </p>');
+check((new DocumentBuilder())->build($product, str_repeat('9', 32), ['description']) === null, 'Empty HTML does not qualify an unnamed product');
+$unnamedTranslation->setDescription('<style>red</style><script>foreignterm()</script>');
+check((new DocumentBuilder())->build($product, str_repeat('9', 32), ['description']) === null, 'Invisible script and style do not qualify an unnamed product');
+$unnamedTranslation->setDescription('<p>Lokaler Text</p><script>foreignterm()</script>');
+$visibleDocument = (new DocumentBuilder())->build($product, str_repeat('9', 32), ['description']);
+check(($visibleDocument['description'] ?? '') === 'Lokaler Text', 'Only visible current-language description enters the index');
+$english = new ProductTranslationEntity();
+$english->setUniqueIdentifier('product-en');
+$english->setLanguageId($channel);
+$english->setName('Rescue drops');
+$product->getTranslations()->add($english);
+$englishDocument = (new DocumentBuilder())->build($product, $channel);
+check($englishDocument['name'] === 'Rescue drops', 'Use only requested language');
+check($englishDocument['description'] === '', 'No German fallback description in English index');
+check($englishDocument['keywords'] === '', 'No German fallback keywords in English index');
+check($englishDocument['categories'] === [], 'No German fallback categories in English index');
+check(!array_key_exists('tags', $englishDocument), 'Untranslated global tags cannot leak languages');
+$translation->setName('Blüten-Essenz');
+$english->setName('Flower-Essence');
+$germanAliases = (new DocumentBuilder())->build($product, $language, ['name']);
+$englishAliases = (new DocumentBuilder())->build($product, $channel, ['name']);
+check($germanAliases['nameHyphenAliases'] === ['BlütenEssenz'], 'German aliases derive only from German names');
+check($englishAliases['nameHyphenAliases'] === ['FlowerEssence'], 'English aliases derive only from English names');
+$translation->setDescription('Local description');
+check(!isset((new DocumentBuilder())->build($product, $language, ['description'])['nameHyphenAliases']), 'Excluding names also excludes derived aliases');
+$translation->setName('Bachblüten Rescue');
+$translation->setDescription('<p>Ruhe &amp; Gelassenheit</p>');
+$english->setName('Rescue drops');
+$translation->setCustomFields(['search_themes' => '<p>Geborgenheit &amp; Vertrauen</p>', 'internal_note' => 'Nicht indizieren']);
+$fields = IndexFields::parse('["customFields.search_themes", "name"]');
+$customDocument = (new DocumentBuilder())->build($product, $language, $fields);
+check($customDocument['customFields']['search_themes'] === 'Geborgenheit & Vertrauen', 'Configured custom field indexed and HTML removed');
+check(!isset($customDocument['customFields']['internal_note']), 'Unselected custom fields excluded');
+check(!isset($customDocument['description'], $customDocument['keywords'], $customDocument['productNumber']), 'Unselected standard fields excluded');
+check(DocumentBuilder::settings([], $fields)['searchableAttributes'] === ['customFields.search_themes', 'name', 'nameHyphenAliases'], 'Configured priority and name-derived aliases are preserved');
+check(DocumentBuilder::settings([], $fields, 'de-DE', true)['searchableAttributes'] === ['customFields.search_themes', 'name', 'queryHints', 'nameHyphenAliases'], 'Opt-in hints keep configured field order');
+check(DocumentBuilder::settings([], ['name', 'description'], 'de-DE', true)['searchableAttributes'] === ['name', 'queryHints', 'nameHyphenAliases', 'description'], 'Query hints precede description without changing the chosen field order');
+check(NameAliases::hyphenCompounds('Blüten-Essenz und Rose‐Water') === ['BlütenEssenz', 'RoseWater'], 'Derive local alphabetic hyphen compounds');
+check(NameAliases::hyphenCompounds('Alpha-Beta-Gamma-Delta') === ['AlphaBeta', 'GammaDelta', 'AlphaBetaGammaDelta'], 'Keep pairwise aliases and join complete multi-hyphen names');
+check(NameAliases::hyphenCompounds('Alpha-Beta‐Gamma') === ['AlphaBeta', 'AlphaBetaGamma'], 'Join mixed Unicode hyphen compounds');
+check(NameAliases::hyphenCompounds('ABC-123 A-B AB-CD') === [], 'Do not generate aliases for identifiers or very short pieces');
+check(!in_array('nameHyphenAliases', DocumentBuilder::settings([], ['description'])['searchableAttributes'], true), 'Do not add name-derived aliases when name is excluded');
+check(array_search('popularity:desc', DocumentBuilder::settings([], $fields, 'de-DE')['rankingRules'], true) > array_search('attribute', DocumentBuilder::settings([], $fields, 'de-DE')['rankingRules'], true), 'German popularity is a late tie-breaker');
+check(array_search('popularity:desc', DocumentBuilder::settings([], $fields, 'en-GB')['rankingRules'], true) > array_search('exactness', DocumentBuilder::settings([], $fields, 'en-GB')['rankingRules'], true), 'English popularity breaks ties after textual relevance');
+foreach (['es-ES', 'fr-FR', 'it-IT'] as $locale) {
+    check(array_search('popularity:desc', DocumentBuilder::settings([], $fields, $locale)['rankingRules'], true) > array_search('exactness', DocumentBuilder::settings([], $fields, $locale)['rankingRules'], true), 'Popularity breaks ties after textual relevance in each language');
+}
+check(DocumentBuilder::settings([], $fields, 'de-DE')['typoTolerance']['minWordSizeForTypos']['oneTypo'] === 4, 'German short-word typo tolerance');
+check(DocumentBuilder::settings([], $fields, 'en-GB')['typoTolerance']['minWordSizeForTypos']['oneTypo'] === 4, 'English supports guarded short-word typo tolerance');
+check((new DocumentBuilder())->build($product, $channel, $fields)['customFields']['search_themes'] === '', 'Custom fields cannot fallback across languages');
+$parent = new SalesChannelProductEntity();
+$parentTranslation = new ProductTranslationEntity();
+$parentTranslation->setUniqueIdentifier('parent-de');
+$parentTranslation->setLanguageId($language);
+$parentTranslation->setCustomFields(['search_themes' => 'Vertrauen', 'parent_only' => 'Ruhe']);
+$parent->setTranslations(new ProductTranslationCollection([$parentTranslation]));
+$product->setParent($parent);
+check(LanguageText::customField($product, $language, 'parent_only') === 'Ruhe', 'Inherit a missing custom field from the parent in the same language');
+check(LanguageText::customField($product, $language, 'search_themes') === '<p>Geborgenheit &amp; Vertrauen</p>', 'Variant custom fields override inherited values');
+check(LanguageText::customField($product, $channel, 'parent_only') === null, 'Do not inherit a parent custom field across languages');
+check(IndexFields::parse('') === IndexFields::DEFAULTS, 'Default field selection');
+$litreId = '00000000000000000000000000100031';
+$quantityUnits = QuantityUnits::parse(json_encode([
+    '00000000000000000000000000100031' => ['symbol'=>'ml','factor'=>1000],
+    '00000000000000000000000000100032' => ['symbol'=>'ml','factor'=>1],
+    '00000000000000000000000000100033' => ['symbol'=>'g','factor'=>1000],
+    '00000000000000000000000000100034' => ['symbol'=>'g','factor'=>1],
+], JSON_THROW_ON_ERROR));
+$variant = new SalesChannelProductEntity();
+$variant->setId(str_repeat('a', 32));
+$variant->setParentId(str_repeat('b', 32));
+$variant->setUnitId('00000000000000000000000000100031');
+$variant->setPurchaseUnit(0.03);
+check(VariantQuantityLabel::forProduct($variant, 'Essence', $language, 'de-DE', $quantityUnits) === '30 ml', 'Distinguish a variant with a neutral converted quantity');
+check(VariantQuantityLabel::forProduct($variant, 'Essence 30 ml', $language, 'en-GB', $quantityUnits) === null, 'Do not repeat the same quantity already in the product name');
+$variant->setPurchaseUnit(0.0001);
+check(VariantQuantityLabel::forProduct($variant, 'Essence', $language, 'de-DE', $quantityUnits) === '0,1 ml' && VariantQuantityLabel::forProduct($variant, 'Essence', $language, 'en-GB', $quantityUnits) === '0.1 ml', 'Show the exact quantity using the current locale decimal separator');
+$variant->setUnit($unit);
+$variant->setUnitId('00000000000000000000000000100032');
+check(VariantQuantityLabel::forProduct($variant, 'Essence', $language, 'de-DE', []) === '0,0001 ml', 'Use the current language SI unit without a configured conversion');
+check(VariantQuantityLabel::forProduct($variant, 'Essence', str_repeat('f', 32), 'en-GB', []) === null, 'Do not use another language unit translation');
+$variant->setParentId(null);
+check(VariantQuantityLabel::forProduct($variant, 'Essence', $language, 'de-DE', $quantityUnits) === null, 'Do not attach a variant size to a parent product');
+$variant->setParentId(str_repeat('b', 32));
+$variant->setProductNumber('ITEM-01');
+$option = new PropertyGroupOptionEntity();$option->setId(str_repeat('1', 32));
+$optionDe = new PropertyGroupOptionTranslationEntity();$optionDe->setUniqueIdentifier('option-de');$optionDe->setLanguageId($language);$optionDe->setName('Rot');
+$optionEn = new PropertyGroupOptionTranslationEntity();$optionEn->setUniqueIdentifier('option-en');$optionEn->setLanguageId($channel);$optionEn->setName('Red');
+$option->setTranslations(new PropertyGroupOptionTranslationCollection([$optionDe, $optionEn]));
+$variant->setOptions(new PropertyGroupOptionCollection([$option]));
+check(VariantOptionLabels::forProduct($variant, 'Essence', $language, '30 ml') === ['labels' => ['Rot'], 'showNumber' => false], 'Show the option in the requested language');
+check(VariantOptionLabels::forProduct($variant, 'Essence', $channel, '30 ml') === ['labels' => ['Red'], 'showNumber' => false], 'Never borrow the German option into English');
+check(VariantOptionLabels::forProduct($variant, 'Essence Rot', $language, '30 ml') === ['labels' => [], 'showNumber' => false], 'Do not duplicate an option already in the name');
+check(VariantOptionLabels::forProduct($variant, 'Essence', str_repeat('f', 32), '30 ml') === ['labels' => [], 'showNumber' => true], 'Use an article number when an option translation is missing');
+$optionDe->setName('30 ml');
+check(VariantOptionLabels::forProduct($variant, 'Essence', $language, '30 ml') === ['labels' => [], 'showNumber' => false], 'Do not repeat the same quantity as an option');
+$variant->setOptions(new PropertyGroupOptionCollection());
+check(VariantOptionLabels::forProduct($variant, 'Essence', $language, null) === ['labels' => [], 'showNumber' => true], 'An undescribed variant uses its article number');
+$sibling = new SalesChannelProductEntity();$sibling->setId(str_repeat('c', 32));$sibling->setParentId(str_repeat('b', 32));$sibling->setProductNumber('ITEM-02');
+$variantNames = [$variant->getId() => 'Essence', $sibling->getId() => 'Essence'];
+$sameSizes = [$variant->getId() => '30 ml', $sibling->getId() => '30 ml'];
+$otherSizes = [$variant->getId() => '30 ml', $sibling->getId() => '50 ml'];
+check(VariantOptionLabels::addNumbersForCollisions([$variant, $sibling], $variantNames, $sameSizes, [], []) === [$variant->getId() => 'ITEM-01', $sibling->getId() => 'ITEM-02'], 'Identically described siblings receive unique article numbers');
+check(VariantOptionLabels::addNumbersForCollisions([$variant, $sibling], $variantNames, $otherSizes, [], []) === [], 'Different sizes already distinguish sibling variants');
+$sibling->setParentId(str_repeat('d', 32));
+check(VariantOptionLabels::addNumbersForCollisions([$variant, $sibling], $variantNames, $sameSizes, [], []) === [], 'Unrelated products do not create sibling collisions');
+check(QuantityUnits::tokens('00000000000000000000000000100032', 8.0, $quantityUnits) === ['8 ml', '8ml', '0.008 l', '0.008l'], 'Index configured millilitre quantities and equivalent litres');
+check(QuantityUnits::tokens('00000000000000000000000000100033', 0.05, $quantityUnits) === ['50 g', '50g', '0.05 kg', '0.05kg'], 'Index configured kilogram quantities as grams and kilograms');
+check(QuantityUnits::tokens('00000000000000000000000000100034', 50.0, $quantityUnits) === ['50 g', '50g', '0.05 kg', '0.05kg'], 'Index configured gram quantities');
+check(ReferenceUnitLabels::label($litreId, 1.0, 'Deutsch', [$litreId=>'litro'], $quantityUnits) === ['amount'=>1.0,'unit'=>'litro'], 'Use only the current language translation for a reference unit');
+check(ReferenceUnitLabels::label($litreId, 1.0, 'l', [], $quantityUnits) === ['amount'=>1.0,'unit'=>'l'], 'A neutral SI symbol needs no translation');
+check(ReferenceUnitLabels::label($litreId, 1.0, 'Deutsch', [], $quantityUnits) === ['amount'=>'1000','unit'=>'ml'], 'Convert an untranslated unit to the explicitly mapped neutral symbol');
+check(ReferenceUnitLabels::label($litreId, 1.0, 'Deutsch', [], []) === null, 'Do not borrow a unit label from another language');
+check(QuantityUnits::tokens($litreId, 0.01, $quantityUnits) === ['10 ml', '10ml', '0.01 l', '0.01l'], 'Convert the configured physical quantity into unit symbols');
+check(QuantityUnits::tokens($litreId, 0.0001, $quantityUnits) === ['0.1 ml', '0.1ml', '0.0001 l', '0.0001l'], 'Preserve fractional quantities');
+check(QuantityUnits::queryKey('Produkt 1 ml') === 'ml:1', 'Recognize an explicit whole-unit quantity');
+check(QuantityUnits::queryKey('Produkt 0,10ml') === 'ml:0.1', 'Normalize decimal comma and trailing zeroes');
+check(QuantityUnits::queryKey('Produkt 00.010 l') === 'ml:10', 'Normalize leading and fractional zeroes and convert litres');
+check(QuantityUnits::queryKey('Produkt 1 kg') === 'g:1000' && QuantityUnits::queryKey('Produkt 1 l') === 'ml:1000', 'Keep mass and volume separate while converting SI units');
+check(QuantityUnits::tokens($litreId, 1.001, [$litreId => ['symbol' => 'kg', 'factor' => 1]]) === ['1.001 kg', '1.001kg', '1001 g', '1001g'] && QuantityUnits::key($litreId, 1.001, [$litreId => ['symbol' => 'kg', 'factor' => 1]]) === 'g:1001', 'Convert known mass without treating an exact product value as an ambiguous query');
+check(QuantityUnits::tokens($litreId, 0.00000000001, $quantityUnits) === ['0.00000001 ml', '0.00000001ml'], 'Do not round an unsupported tiny equivalent');
+check(QuantityUnits::tokens($litreId, 0.000000000001, $quantityUnits) === [], 'Do not index a quantity rounded to zero');
+check(QuantityUnits::tokens($litreId, 0.000000000014, $quantityUnits) === [], 'Do not index a materially rounded small product quantity');
+check(QuantityUnits::tokens($litreId, 0.001000000004, $quantityUnits) === [], 'Do not promote a different size after rounding a custom factor conversion');
+check(QuantityUnits::tokens($litreId, 0.029, $quantityUnits)[0] === '29 ml', 'Allow ordinary floating point representation error');
+check(QuantityUnits::queryKey('Produkt 1 ml 2 ml') === null && QuantityUnits::queryKey('AB-10ml') === null && QuantityUnits::queryKey('Produkt -1 ml') === null, 'Do not guess at multiple quantities, article codes or negative amounts');
+check(QuantityUnits::queryKey('Produkt 1 ml + 2 ml') === null && QuantityUnits::queryKey('Produkt 1ml-2ml') === null && QuantityUnits::queryKey('Produkt - 1 ml') === null && QuantityUnits::queryKey('Produkt −1 ml') === null && QuantityUnits::queryKey('Produkt + 1 ml') === null, 'Do not prioritize one amount in signed quantities or ranges');
+check(PartialMatches::withoutTrailingQuantity('Flower Essence 0.03 l') === 'Flower Essence' && PartialMatches::withoutTrailingQuantity('Blüte 30ml') === 'Blüte', 'Keep the entire name when the trailing amount is safely separable');
+check(PartialMatches::withoutTrailingQuantity('AB-30ml') === null && PartialMatches::withoutTrailingQuantity('Flower 1 ml + 2 ml') === null && PartialMatches::withoutTrailingQuantity('Flower 1,000 ml') === null && PartialMatches::withoutTrailingQuantity('10 ml Flower') === null && PartialMatches::withoutTrailingQuantity('Flower 30ml extra') === null && PartialMatches::withoutTrailingQuantity('Flower 2 x 30ml') === null, 'Never drop an ambiguous quantity, code, nonfinal amount or pack multiplier');
+check(QuantityUnits::queryKey('Produkt 1,000 ml') === null && QuantityUnits::queryKey('Produkt 1.000 ml') === null && QuantityUnits::queryKey('Produkt 0,100 ml') === 'ml:0.1', 'Do not guess ambiguous thousands separators');
+check(QuantityUnits::key($litreId, 0.001001, $quantityUnits) === 'ml:1.001', 'Preserve known product quantities even when user spelling would be ambiguous');
+$quantityHits = [
+    ['id'=>'fraction', 'quantityKey'=>'ml:0.1', '_rankingScoreDetails'=>['words'=>['matchingWords'=>1], 'typo'=>['typoCount'=>0]]],
+    ['id'=>'whole', 'quantityKey'=>'ml:1', '_rankingScoreDetails'=>['words'=>['matchingWords'=>1], 'typo'=>['typoCount'=>0]]],
+    ['id'=>'weaker', 'quantityKey'=>'ml:1', '_rankingScoreDetails'=>['words'=>['matchingWords'=>0], 'typo'=>['typoCount'=>0]]],
+];
+check(array_column(QuantityRelevance::reorder($quantityHits, 'ml:1'), 'id') === ['whole', 'fraction', 'weaker'], 'Prefer the exact quantity only within equally matched word and typo groups');
+check(QuantityRelevance::reorder($quantityHits, null) === $quantityHits, 'Ambiguous quantities retain the original order');
+check(QuantityRelevance::reorder([['id'=>'unknown']], 'ml:1') === [['id'=>'unknown']], 'Missing ranking metadata retains the original order');
+
+check(QuantityUnits::tokens(str_repeat('f', 32), 0.01, $quantityUnits) === [], 'Do not guess unknown units');
+check(QuantityUnits::tokens($litreId, 0.01, QuantityUnits::parse('{}')) === [], 'An explicit empty mapping disables quantity indexing');
+check(in_array('quantity', IndexFields::DEFAULTS, true), 'Default field selection includes physical quantity');
+$product->setUnitId($litreId);
+$product->setPurchaseUnit(0.01);
+$germanQuantity = (new DocumentBuilder())->build($product, $language, ['name', 'quantity'], 0, [], $quantityUnits);
+$englishQuantity = (new DocumentBuilder())->build($product, $channel, ['name', 'quantity'], 0, [], $quantityUnits);
+check($germanQuantity['quantity'] === ['10 ml', '10ml', '0.01 l', '0.01l'] && $englishQuantity['quantity'] === ['10 ml', '10ml', '0.01 l', '0.01l'] && $germanQuantity['quantityKey'] === 'ml:10' && $englishQuantity['quantityKey'] === 'ml:10', 'Physical quantity is language neutral without translated text');
+check(!isset((new DocumentBuilder())->build($product, $language, ['name'], 0, [], $quantityUnits)['quantityKey']), 'Unselected quantity key is not indexed');
+check(!isset((new DocumentBuilder())->build($product, $language, ['name'], 0, [], $quantityUnits)['quantity']), 'Unselected quantity is not indexed');
+$product->setPurchaseUnit(0.001000000004);
+$roundedQuantity = (new DocumentBuilder())->build($product, $language, ['name', 'quantity'], 0, [], $quantityUnits);
+check($roundedQuantity['quantity'] === [] && !isset($roundedQuantity['quantityKey']), 'A materially rounded size cannot enter a product document or affect relevance');
+$product->setUnitId(null);
+$product->setPurchaseUnit(null);
+
+foreach (['[]', '[1]', '{"wrong":{"symbol":"ml","factor":1000}}', '{"00000000000000000000000000100031":{"symbol":"bad","factor":1000}}', '{"00000000000000000000000000100031":{"symbol":"ml","factor":-1}}'] as $invalidQuantity) {
+    try { QuantityUnits::parse($invalidQuantity); throw new RuntimeException('Invalid quantity mapping accepted'); }
+    catch (InvalidArgumentException) { check(true, 'Reject invalid quantity mapping'); }
+}
+
+foreach (['searchKeywords', 'product.searchKeywords'] as $unsafeField) {
+    try {
+        IndexFields::parse(json_encode([$unsafeField], JSON_THROW_ON_ERROR));
+        throw new RuntimeException('Cross-language Shopware keyword index was accepted');
+    } catch (InvalidArgumentException $error) {
+        check(str_contains($error->getMessage(), 'fallback-language'), 'Explain why generated Shopware keywords are excluded');
+    }
+}
+check(in_array('customFields.example', IndexFields::parse('["name","customFields.example"]'), true), 'Custom fields can be configured explicitly');
+check(IndexFields::text('<p>Blüten</p><p>Ruhe</p><br>Vertrauen') === 'Blüten Ruhe Vertrauen', 'Preserve word boundaries between adjacent HTML blocks');
+check(IndexFields::text('<p>Lavendel</p><STYLE>.fake{color:red}</STYLE><script>hiddenSearchTerm()</script><p>Öl</p>') === 'Lavendel Öl', 'Exclude script and style contents from indexed text');
+check(IndexFields::text('<style>unrelated</style><script>irrelevant()</script>') === '', 'Non-visible HTML alone does not create searchable content');
+check(IndexFields::forLocale('["name"]', '{"de-DE":["name","customFields.german"]}', 'en-GB') === ['name'], 'Other languages use the global field selection');
+check(IndexFields::forLocale('["name"]', '{"de-DE":["name","customFields.german"]}', 'de-DE') === ['name', 'customFields.german'], 'Apply only the matching language field override');
+try {
+    IndexFields::forLocale('', '{"en-GB":["bad.field"]}', 'de-DE');
+    throw new RuntimeException('Invalid field override accepted');
+} catch (InvalidArgumentException) {
+    ++$checks;
+}
+check((new DocumentBuilder())->build($product, $language, ['options'])['options'] === [], 'Options are a supported standard field');
+foreach (['[]', '["name","name"]', '["customer.email"]', '["customFields.a.b"]', '{"name":1}'] as $invalid) {
+    try {
+        IndexFields::parse($invalid);
+        throw new RuntimeException('Invalid field configuration accepted');
+    } catch (InvalidArgumentException) {
+        ++$checks;
+    }
+}
+check(count((new DocumentBuilder())->build($product, $language, IndexFields::STANDARD)) > 10, 'All advertised standard fields are supported');
+$input = SearchInput::fromRequest(new Request(['q' => ' Bachblüten ', 'page' => '-2', 'sort' => 'price-asc', 'minPrice' => '12.50', 'manufacturer' => [$channel]]));
+check($input->query === 'Bachblüten' && $input->page === 1 && $input->minPrice === 12.5, 'Normalize search input');
+check(SearchInput::fromRequest(new Request(['minPrice' => '4.0150']))->minPrice === 4.015, 'Accept a four-decimal price generated by a fractional range minimum');
+check($input->manufacturers === [$channel], 'Validated facet IDs');
+check(Discovery::suggestions('{"de-DE":["schutz"],"en-GB":["care"]}', 'en-GB') === ['care'], 'Suggestions stay in their configured language');
+check(Discovery::suggestions('{"de-DE":[]}', 'de-DE') === [], 'An empty list suppresses suggestions');
+check(Discovery::suggestions('{broken', 'de-DE') === [], 'Invalid suggestion configuration does not break search');
+check(Discovery::featured('{"de-DE":["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],"en-GB":[]}', 'en-GB') === [], 'Featured products are language-specific');
+check(Discovery::featured('{"de-DE":["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","bad"]}', 'de-DE') === [str_repeat('a', 32)], 'Only valid featured product identifiers are used');
+check(Discovery::featured('', 'de-DE') === [] && Discovery::featured('', 'fr-FR') === [], 'Featured products have no shop-specific defaults');
+check(Discovery::featured('{"de-DE":[]}', 'de-DE') === [], 'An explicit empty list disables reference highlights for the language');
+check(Discovery::featured('', 'nl-NL') === [], 'Reference highlights are not borrowed by other languages');
+check(SearchService::withoutMatchedParents(['parent', 'child', 'other'], ['parent']) === ['child', 'other'], 'Show matching variants without a duplicate parent');
+$preciseFacets = [['id' => 'a', 'name' => 'A', 'count' => 25], ['id' => 'b', 'name' => 'B', 'count' => 3]];
+$expandedFacets = [['id' => 'a', 'name' => 'A', 'count' => 30], ['id' => 'b', 'name' => 'B', 'count' => 7], ['id' => 'c', 'name' => 'C', 'count' => 2]];
+check(SearchService::precisionFacetCounts($preciseFacets, $expandedFacets, 20) === [
+    ['id' => 'a', 'name' => 'A', 'count' => 25], ['id' => 'b', 'name' => 'B', 'count' => 7], ['id' => 'c', 'name' => 'C', 'count' => 2],
+], 'Facet counts follow per-choice precise/expanded thresholds');
+check(SearchService::withoutMatchedParents(['parent'], []) === ['parent'], 'Keep a parent when no variant matched');
+check(SearchService::matchedParents(['child' => 'parent'], ['parent' => true, 'child' => true], ['parent' => true]) === [], 'A variant excluded by active filters must not hide its parent');
+check(SearchService::matchedParents(['child' => 'parent'], ['parent' => true, 'child' => true], ['child' => true]) === ['parent'], 'An eligible matching variant still hides its parent');
+check(SearchService::matchedParents(['child' => 'parent'], ['parent' => true], ['child' => true]) === [], 'A partial variant must not hide a primary parent after filtering');
+$priceInput = SearchInput::fromRequest(new Request(['minPrice' => '10', 'maxPrice' => '15']));
+check(SearchService::filterByDisplayedPrice(['one', 'two', 'three', 'missing'], ['one' => 10.0, 'two' => 15.0, 'three' => 15.01], $priceInput) === ['one', 'two'], 'Filter by the actual displayed price and include the bounds');
+check(FeedbackConfig::parse('{"de-DE":{"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa":5}}', 'popularity')['de-DE'][$channel] === 5, 'Parse per-language popularity');
+check(FeedbackConfig::parse('{"de-DE":{"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa":["ruhe"]}}', 'hints')['de-DE'][$channel] === ['ruhe'], 'Parse per-language query hints');
+$digest = QueryClickFeedback::fingerprint('de-DE', "  BLA\u{0308}TTER\tTest ", 'local-test-key');
+check($digest === '10093bd0c0686b5e3b7ba4619354bf8be861c5614059710f2127e2283406d0f8', 'PHP and local generator use the same normalized keyed query fingerprint');
+check($digest !== QueryClickFeedback::fingerprint('en-GB', "  BLA\u{0308}TTER\tTest ", 'local-test-key'), 'Query feedback cannot cross language scopes');
+check(QueryClickFeedback::keyCheck('local-test-key') === 'f7a0cc182218696c297fc4c83120b95b7b227636d5365c37fd0fb12451b69823', 'PHP and local generator use the same key validation marker');
+$ids = array_map(static fn (int $n): string => str_repeat(dechex($n), 32), range(1, 7));
+$queryFeedback = json_encode(['version' => 1, 'keyCheck' => QueryClickFeedback::keyCheck('local-test-key'), 'locales' => ['de-DE' => [$digest => [$ids[4] => 3, $ids[5] => 8]]]], JSON_THROW_ON_ERROR);
+check(QueryClickFeedback::parse($queryFeedback, 'local-test-key')['de-DE'][$digest][$ids[5]] === 8, 'Parse keyed query feedback');
+check(QueryClickFeedback::rerank($ids, [$ids[4] => 3, $ids[5] => 8, str_repeat('f', 32) => 100]) === [$ids[0], $ids[1], $ids[2], $ids[5], $ids[4], $ids[3], $ids[6]], 'Keep first three results and promote only eligible feedback products');
+check(QueryClickFeedback::rerank($ids, [$ids[5] => 8], array_slice($ids, 0, 4)) === $ids, 'Similar matches cannot pass exact matches');
+try { QueryClickFeedback::parse(json_encode(['version' => 1, 'keyCheck' => QueryClickFeedback::keyCheck('local-test-key'), 'locales' => ['de-DE' => ['plaintext' => [$channel => 2]]]], JSON_THROW_ON_ERROR), 'local-test-key'); throw new RuntimeException('Plaintext feedback key accepted'); }
+catch (InvalidArgumentException) { ++$checks; }
+try { QueryClickFeedback::parse($queryFeedback, 'wrong-key'); throw new RuntimeException('Feedback with another key accepted'); }
+catch (InvalidArgumentException) { ++$checks; }
+$enDigest = QueryClickFeedback::fingerprint('en-GB', 'calm', 'local-test-key');
+$additionalFeedback = json_encode(['version' => 1, 'keyCheck' => QueryClickFeedback::keyCheck('local-test-key'), 'locales' => ['de-DE' => [$digest => [$ids[4] => 9]], 'en-GB' => [$enDigest => [$ids[0] => 2]]]], JSON_THROW_ON_ERROR);
+$combinedFeedback = QueryClickFeedback::merge($queryFeedback, $additionalFeedback, 'local-test-key');
+$combinedData = QueryClickFeedback::parse($combinedFeedback, 'local-test-key');
+check($combinedData['de-DE'][$digest][$ids[4]] === 9 && $combinedData['de-DE'][$digest][$ids[5]] === 8 && $combinedData['en-GB'][$enDigest][$ids[0]] === 2, 'Merge query clicks without losing other products or languages');
+check(QueryClickFeedback::merge($combinedFeedback, $additionalFeedback, 'local-test-key') === $combinedFeedback, 'Repeated query click imports are idempotent');
+try {
+    $fullFeedback = json_encode(['version' => 1, 'keyCheck' => QueryClickFeedback::keyCheck('local-test-key'), 'locales' => ['de-DE' => [$digest => array_fill_keys(array_slice($ids, 0, 5), 2)]]], JSON_THROW_ON_ERROR);
+    $extraFeedback = json_encode(['version' => 1, 'keyCheck' => QueryClickFeedback::keyCheck('local-test-key'), 'locales' => ['de-DE' => [$digest => [$ids[5] => 2]]]], JSON_THROW_ON_ERROR);
+    QueryClickFeedback::merge($fullFeedback, $extraFeedback, 'local-test-key');
+    throw new RuntimeException('Oversized feedback merge accepted');
+} catch (InvalidArgumentException) { ++$checks; }
+$existingHints = json_encode(['de-DE' => [$channel => ['ruhe', 'kraft'], $language => ['blüte']], 'en-GB' => [$channel => ['calm']]], JSON_THROW_ON_ERROR);
+$newHints = json_encode(['de-DE' => [$channel => ['ruhe', 'gelassen'], $three => ['sonne']], 'fr-FR' => [$channel => ['calme']]], JSON_THROW_ON_ERROR);
+$mergedHints = FeedbackConfig::parse(FeedbackConfig::mergeHints($existingHints, $newHints), 'hints');
+check($mergedHints['de-DE'][$channel] === ['ruhe', 'kraft', 'gelassen'] && $mergedHints['de-DE'][$language] === ['blüte'] && $mergedHints['de-DE'][$three] === ['sonne'], 'Merge hints per product without removing or duplicating existing entries');
+check($mergedHints['en-GB'][$channel] === ['calm'] && $mergedHints['fr-FR'][$channel] === ['calme'] && !isset($mergedHints['en-GB'][$three]), 'Merge hints without crossing languages');
+try {
+    $fullHints = json_encode(['de-DE' => [$channel => array_map(static fn (int $n): string => 'term' . $n, range(1, 50))]], JSON_THROW_ON_ERROR);
+    FeedbackConfig::mergeHints($fullHints, json_encode(['de-DE' => [$channel => ['extra']]], JSON_THROW_ON_ERROR));
+    throw new RuntimeException('Oversized hint merge was accepted');
+} catch (InvalidArgumentException) { ++$checks; }
+foreach ([['{"de-DE":{"bad":2}}','popularity'], ['{"de-DE":{"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa":-1}}','popularity'], ['{"de-DE":{"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa":[42]}}','hints'], ['["invalid"]','hints']] as [$badJson, $kind]) {
+    try {
+        FeedbackConfig::parse($badJson, $kind);
+        throw new RuntimeException('Invalid feedback accepted');
+    } catch (InvalidArgumentException) {
+        ++$checks;
+    }
+}
+foreach ([['sort' => 'random'], ['minPrice' => '-1'], ['minPrice' => '1e3'], ['minPrice' => '1.00001'], ['minPrice' => '20', 'maxPrice' => '10'], ['manufacturer' => ['bad-id']], ['q' => str_repeat('a', 151)]] as $invalid) {
+    try {
+        SearchInput::fromRequest(new Request($invalid));
+        throw new RuntimeException('Invalid search request accepted');
+    } catch (BadRequestHttpException) {
+        ++$checks;
+    }
+}
+check(!isset($document['price'], $document['customerId']), 'No contextual data in documents');
+$settings = DocumentBuilder::settings(['rescue' => ['notfall']]);
+check($settings['displayedAttributes'] === ['id', 'unnamed', 'quantityKey'], 'Only IDs, missing-name flags and normalized quantities are returned for hydration');
+check($settings['typoTolerance']['disableOnAttributes'] === ['productNumber', 'ean', 'manufacturerNumber', 'quantity', 'nameHyphenAliases'], 'Exact identifiers, quantities and generated name aliases');
+check(json_decode(json_encode(DocumentBuilder::settings([])), true)['synonyms'] === [], 'Empty synonyms encode as JSON object');
+check(str_contains(json_encode(DocumentBuilder::settings([])), '"synonyms":{}'), 'Engine requires object for synonyms');
+
+$requests = [];
+$responses = [
+    new MockResponse('{"taskUid":7}', ['http_code' => 202]),
+    new MockResponse('{"status":"succeeded"}'),
+    new MockResponse('{"message":"not found"}', ['http_code' => 404]),
+    new MockResponse('{"taskUid":8}', ['http_code' => 202]),
+    new MockResponse('{"status":"failed","error":{"code":"invalid_settings"}}'),
+];
+$http = new MockHttpClient(static function ($method, $url, $options) use (&$responses, &$requests) {
+    $requests[] = [$method, $url, $options];
+    return array_shift($responses);
+});
+$engine = new Engine($http, 'http://127.0.0.1:7700/', 'test-key');
+$engine->mutate('POST', '/indexes', ['uid' => 'test', 'primaryKey' => 'id']);
+check(count($requests) === 2, 'Await asynchronous mutations');
+check($requests[0][1] === 'http://127.0.0.1:7700/indexes', 'Engine URL construction');
+check(in_array('Authorization: Bearer test-key', $requests[0][2]['headers'], true), 'Private engine authentication');
+check($requests[0][2]['no_proxy'] === '*', 'Search requests bypass environment proxies');
+foreach (['https://example.com', 'http://127.0.0.1.example.com', 'http://user@127.0.0.1', 'http://127.0.0.1?remote=1', 'http://192.168.1.2:7700'] as $invalidUrl) {
+    try {
+        (new Engine(new MockHttpClient(), $invalidUrl, 'key'))->request('GET', '/health');
+        throw new RuntimeException('Nonlocal search URL was accepted');
+    } catch (RuntimeException $e) {
+        check(str_contains($e->getMessage(), 'loopback'), 'Reject nonlocal or malformed search URLs');
+    }
+}
+$ipv6 = new Engine(new MockHttpClient([new MockResponse('{}')]), 'http://[::1]:7700', 'key');
+check($ipv6->request('GET', '/health') === [], 'Accept IPv6 loopback');
+check($engine->request('GET', '/indexes/missing', allowMissing: true) === null, 'Missing index handled');
+$compatible = new Engine(new MockHttpClient([new MockResponse('{"pkgVersion":"1.56.0"}')]), 'http://127.0.0.1:7700', 'key');
+$compatible->ensureCompatible();
+$compatible->ensureCompatible();
+++$checks;
+try {
+    (new Engine(new MockHttpClient([new MockResponse('{"pkgVersion":"1.8.0"}')]), 'http://127.0.0.1:7700', 'key'))->ensureCompatible();
+    throw new RuntimeException('Unsupported engine version was accepted');
+} catch (RuntimeException $e) {
+    check(str_contains($e->getMessage(), '1.9'), 'Reject unsupported search engine versions');
+}
+try {
+    $engine->mutate('PATCH', '/indexes/test/settings', []);
+    throw new RuntimeException('Failed task was accepted');
+} catch (RuntimeException $e) {
+    check(str_contains($e->getMessage(), 'invalid_settings'), 'Surface failed tasks');
+}
+try {
+    (new Engine($http, 'http://127.0.0.1:7700', ''))->request('GET', '/health');
+    throw new RuntimeException('Empty key was accepted');
+} catch (RuntimeException $e) {
+    check(str_contains($e->getMessage(), 'not configured'), 'Require explicit engine key');
+}
+
+$xml = new DOMDocument();
+$xml->load(dirname(__DIR__) . '/src/Resources/config/config.xml');
+check($xml->schemaValidate((getenv('SHOPWARE_ROOT') ?: dirname(__DIR__, 4)) . '/vendor/shopware/core/System/SystemConfig/Schema/config.xsd'), 'Shopware configuration schema');
+echo "$checks checks passed.\n";

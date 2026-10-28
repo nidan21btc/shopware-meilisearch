@@ -1,0 +1,120 @@
+<?xml version="1.0"?>
+<container xmlns="http://symfony.com/schema/dic/services">
+    <parameters>
+        <parameter key="env(SHOPWARE_MEILISEARCH_URL)">http://127.0.0.1:7700</parameter>
+        <parameter key="env(SHOPWARE_MEILISEARCH_KEY)"></parameter>
+        <parameter key="env(SHOPWARE_MEILISEARCH_SOCKET)"></parameter>
+    </parameters>
+    <services>
+        <service id="ShopwareMeilisearch\Search\SearchService">
+            <argument type="service" id="ShopwareMeilisearch\Search\Engine"/>
+            <argument type="service" id="sales_channel.product.repository"/>
+            <argument type="service" id="product_manufacturer.repository"/>
+            <argument type="service" id="category.repository"/>
+            <argument type="service" id="Shopware\Core\Content\Product\SalesChannel\ProductCloseoutFilterFactory"/>
+            <argument type="service" id="ShopwareMeilisearch\Search\ParentTranslations"/>
+            <argument type="service" id="ShopwareMeilisearch\Search\CurrentLanguageNames"/>
+            <argument type="service" id="ShopwareMeilisearch\Search\IdentifierFallback"/>
+            <argument type="service" id="ShopwareMeilisearch\Search\ReferenceUnitLabels"/>
+            <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
+            <argument>%env(string:SHOPWARE_MEILISEARCH_KEY)%</argument>
+            <argument type="service" id="logger"/>
+        </service>
+        <service id="ShopwareMeilisearch\Controller\SearchController" public="true">
+            <argument type="service" id="ShopwareMeilisearch\Search\SearchService"/>
+            <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
+            <argument type="service" id="logger"/>
+            <call method="setContainer"><argument type="service" id="service_container"/></call>
+            <tag name="controller.service_arguments"/>
+        </service>
+        <service id="ShopwareMeilisearch\Search\Engine">
+            <argument type="service" id="http_client"/>
+            <argument>%env(string:SHOPWARE_MEILISEARCH_URL)%</argument>
+            <argument>%env(string:SHOPWARE_MEILISEARCH_KEY)%</argument>
+            <argument>%env(string:SHOPWARE_MEILISEARCH_SOCKET)%</argument>
+        </service>
+        <service id="ShopwareMeilisearch\Search\DocumentBuilder"/>
+        <service id="ShopwareMeilisearch\Search\DirtyState">
+            <argument type="service" id="Doctrine\DBAL\Connection"/>
+        </service>
+        <service id="ShopwareMeilisearch\Subscriber\IndexInvalidationSubscriber">
+            <argument type="service" id="ShopwareMeilisearch\Search\DirtyState"/>
+            <argument type="service" id="logger"/>
+            <tag name="kernel.event_subscriber"/>
+        </service>
+        <service id="ShopwareMeilisearch\Search\ParentTranslations">
+            <argument type="service" id="product.repository"/>
+        </service>
+        <service id="ShopwareMeilisearch\Search\CurrentLanguageNames">
+            <argument type="service" id="Doctrine\DBAL\Connection"/>
+        </service>
+        <service id="ShopwareMeilisearch\Search\ReferenceUnitLabels">
+            <argument type="service" id="unit.repository"/>
+            <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
+        </service>
+        <service id="ShopwareMeilisearch\Search\IdentifierFallback">
+            <argument type="service" id="ShopwareMeilisearch\Search\Engine"/>
+            <argument type="service" id="sales_channel.product.repository"/>
+            <argument type="service" id="ShopwareMeilisearch\Search\ParentTranslations"/>
+            <argument type="service" id="Shopware\Core\Content\Product\SalesChannel\ProductCloseoutFilterFactory"/>
+            <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
+        </service>
+        <service id="ShopwareMeilisearch\Search\Indexer">
+            <argument type="service" id="ShopwareMeilisearch\Search\Engine"/>
+            <argument type="service" id="sales_channel.product.repository"/>
+            <argument type="service" id="ShopwareMeilisearch\Search\DocumentBuilder"/>
+            <argument type="service" id="ShopwareMeilisearch\Search\ParentTranslations"/>
+            <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
+            <argument>%kernel.project_dir%/var/shopware-meilisearch</argument>
+        </service>
+        <service id="ShopwareMeilisearch\Command\IndexCommand">
+            <argument type="service" id="ShopwareMeilisearch\Search\Indexer"/>
+            <argument type="service" id="Shopware\Core\System\SalesChannel\Context\SalesChannelContextFactory"/>
+            <argument type="service" id="Doctrine\DBAL\Connection"/>
+            <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
+            <tag name="console.command"/>
+        </service>
+        <service id="ShopwareMeilisearch\Command\ImportSignalsCommand">
+            <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
+            <argument>%env(string:SHOPWARE_MEILISEARCH_KEY)%</argument>
+            <tag name="console.command"/>
+        </service>
+        <service id="ShopwareMeilisearch\Command\AuditIndexFieldsCommand">
+            <argument type="service" id="Doctrine\DBAL\Connection"/>
+            <argument type="service" id="ShopwareMeilisearch\Search\Engine"/>
+            <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
+            <tag name="console.command"/>
+        </service>
+        <service id="ShopwareMeilisearch\Command\AuditReferenceUnitsCommand">
+            <argument type="service" id="Doctrine\DBAL\Connection"/>
+            <argument type="service" id="Shopware\Core\System\SalesChannel\Context\SalesChannelContextFactory"/>
+            <argument type="service" id="sales_channel.product.repository"/>
+            <argument type="service" id="ShopwareMeilisearch\Search\ReferenceUnitLabels"/>
+            <tag name="console.command"/>
+        </service>
+        <service id="ShopwareMeilisearch\Command\AuditTranslationsCommand">
+            <argument type="service" id="Doctrine\DBAL\Connection"/>
+            <argument type="service" id="Shopware\Core\System\SalesChannel\Context\SalesChannelContextFactory"/>
+            <argument type="service" id="sales_channel.product.repository"/>
+            <argument type="service" id="ShopwareMeilisearch\Search\ParentTranslations"/>
+            <tag name="console.command"/>
+        </service>
+        <service id="ShopwareMeilisearch\Command\AuditFacetTranslationsCommand">
+            <argument type="service" id="Doctrine\DBAL\Connection"/>
+            <argument type="service" id="Shopware\Core\System\SalesChannel\Context\SalesChannelContextFactory"/>
+            <argument type="service" id="sales_channel.product.repository"/>
+            <argument type="service" id="ShopwareMeilisearch\Search\ParentTranslations"/>
+            <tag name="console.command"/>
+        </service>
+        <service id="ShopwareMeilisearch\ScheduledTask\ReindexTask">
+            <tag name="shopware.scheduled.task"/>
+        </service>
+        <service id="ShopwareMeilisearch\ScheduledTask\ReindexTaskHandler">
+            <argument type="service" id="scheduled_task.repository"/>
+            <argument type="service" id="logger"/>
+            <argument type="service" id="ShopwareMeilisearch\Command\IndexCommand"/>
+            <argument type="service" id="ShopwareMeilisearch\Search\DirtyState"/>
+            <tag name="messenger.message_handler"/>
+        </service>
+    </services>
+</container>

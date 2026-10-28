@@ -1,0 +1,117 @@
+<aside class="el-search__filters">
+    {% if input.query == '' %}
+        {% if popularQueries|length %}
+            <h2 class="el-search__popular-title">{{ 'elSearch.popular'|trans }}</h2>
+            <div class="el-search__popular">
+                {% for term in popularQueries %}<button type="button" data-el-suggestion="{{ term }}"><span class="el-search__suggestion-icon" aria-hidden="true">{% sw_icon 'search' style {size:'sm'} %}</span><span>{{ term }}</span><span class="el-search__suggestion-arrow" aria-hidden="true">↖</span></button>{% endfor %}
+            </div>
+        {% endif %}
+    {% else %}
+    <div class="el-search__mobile-chips">
+        {% for facet in [{key:'category', label:'elSearch.categories', values:result.categories, selected:input.categories}, {key:'manufacturer', label:'elSearch.brands', values:result.manufacturers, selected:input.manufacturers}] %}
+            {% if facet.values|length %}
+                <div class="el-search__chip-row" aria-label="{{ facet.label|trans }}">
+                    {% for value in facet.values %}
+                        <button type="button" data-el-chip data-facet="{{ facet.key }}" data-value="{{ value.id }}" aria-pressed="{{ value.id in facet.selected ? 'true' : 'false' }}">{{ value.name }}</button>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endfor %}
+    </div>
+    <button type="button" class="el-search__filter-toggle" data-el-filter-toggle aria-expanded="false">{% sw_icon 'filter' style {size:'sm'} %}<span>{{ 'elSearch.filters'|trans }}</span></button>
+    <form data-el-filters>
+        {% for facet in [{key:'category', label:'elSearch.categories', values:result.categories, selected:input.categories}, {key:'manufacturer', label:'elSearch.brands', values:result.manufacturers, selected:input.manufacturers}] %}
+            {% if facet.values|length %}
+                <details open class="el-search__facet" data-el-facet="{{ facet.key }}">
+                    <summary>{{ facet.label|trans }}</summary>
+                    {% if facet.values|length > 5 %}
+                        <div class="el-search__facet-search">
+                            <span class="el-search__facet-search-icon" aria-hidden="true">{% sw_icon 'search' style {size:'sm'} %}</span>
+                            <input type="search" data-el-facet-search placeholder="{{ 'elSearch.filterSearch'|trans }}" aria-label="{{ facet.label|trans }}">
+                        </div>
+                    {% endif %}
+                    <div class="el-search__facet-values">
+                        {% for value in facet.values %}
+                            <label class="el-search__facet-value" data-el-facet-value {% if loop.index > 5 and value.id not in facet.selected %}hidden{% endif %}>
+                                <input type="checkbox" name="{{ facet.key }}[]" value="{{ value.id }}" {% if result.facetCountsMayChange %}aria-describedby="el-search-facet-counts-note"{% endif %} {% if value.id in facet.selected %}checked{% endif %}>
+                                <span>{{ value.name }}</span><span class="el-search__facet-count">{{ value.count }}{% if result.facetCountsMayChange %}*{% endif %}</span>
+                            </label>
+                        {% endfor %}
+                    </div>
+                    {% if facet.values|length > 5 %}
+                        <button type="button" class="el-search__more" data-el-show-more data-more="{{ 'elSearch.more'|trans }}" data-less="{{ 'elSearch.less'|trans }}">{{ 'elSearch.more'|trans }} ⌄</button>
+                    {% endif %}
+                </details>
+            {% endif %}
+        {% endfor %}
+        <button type="button" data-el-reset class="el-search__reset">{{ 'elSearch.reset'|trans }}</button>
+        {% if result.facetCountsMayChange and (result.categories|length or result.manufacturers|length) %}
+            <p id="el-search-facet-counts-note" class="el-search__facet-note" data-el-facet-counts-may-change>{{ 'elSearch.facetCountsMayChange'|trans }}</p>
+        {% endif %}
+    </form>
+    {% endif %}
+</aside>
+<section class="el-search__listing{% if input.query == '' and popularQueries|length %} el-search__listing--discovery-with-suggestions{% endif %}" data-el-result-status="{{ 'elSearch.results'|trans({'%count%':result.total}) }}">
+    <div class="el-search__toolbar">
+        <span>{% if input.query == '' %}{{ (result.featured ? 'elSearch.featured' : 'elSearch.discover')|trans }}{% else %}{{ 'elSearch.results'|trans({'%count%':result.total}) }}{% endif %}</span>
+        {% if input.query != '' and result.total > 0 %}<button type="button" class="el-search__show-all" data-el-show-all aria-controls="el-search-product-grid" aria-expanded="false">{{ 'elSearch.showAll'|trans }}</button>{% endif %}
+        <div class="el-search__toolbar-actions">
+            {% if result.hasSimilar %}
+                <button type="button" class="el-search__similar" data-el-similar aria-pressed="{{ input.includeSimilar ? 'true' : 'false' }}">{{ (input.includeSimilar ? 'elSearch.hideSimilar' : 'elSearch.showSimilar')|trans }}</button>
+            {% endif %}
+            <label>{{ 'elSearch.sort'|trans }}
+                <select data-el-sort name="sort">
+                    {% for key in ['relevance','price-asc','price-desc','name-asc'] %}
+                        <option value="{{ key }}" {% if input.sort == key %}selected{% endif %}>{{ ('elSearch.sort-' ~ key)|trans }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+        </div>
+    </div>
+    {% if result.truncated %}<p>{{ 'elSearch.narrow'|trans }}</p>{% endif %}
+    {% if result.broadened %}<p {% if result.quantityFallback %}data-el-quantity-fallback{% endif %}>{{ (result.quantityFallback ? 'elSearch.quantityFallback' : 'elSearch.partialResults')|trans }}</p>{% endif %}
+    {% if result.orthographyFallback %}<p>{{ 'elSearch.orthographyResults'|trans }}</p>{% endif %}
+    {% if not result.products|length %}
+        <p class="el-search__empty">{{ 'elSearch.empty'|trans }}</p>
+        {% if popularQueries|length %}
+            <p>{{ 'elSearch.trySuggestion'|trans }}</p>
+            <div class="el-search__popular">{% for term in popularQueries %}<button type="button" data-el-suggestion="{{ term }}">{{ term }}</button>{% endfor %}</div>
+        {% endif %}
+    {% endif %}
+    <div class="el-search__carousel">
+    {% if input.query == '' %}<button type="button" class="el-search__carousel-arrow el-search__carousel-arrow--previous" data-el-carousel="-1" aria-label="{{ 'elSearch.previous'|trans }}">‹</button>{% endif %}
+    <div id="el-search-product-grid" class="el-search__grid" {% if input.query == '' %}data-el-carousel-grid{% endif %}>
+        {% for product in input.query == '' ? result.products|slice(0, 10) : result.products %}
+            {% set name = result.names[product.id] %}
+            <article class="el-search__card" data-product-id="{{ product.id }}">
+                <a href="{{ seoUrl('frontend.detail.page', {productId:product.id}) }}" class="el-search__product-link">
+                    <div class="el-search__image">
+                        {% if product.cover.media %}
+                            {% sw_thumbnails 'el-search-product' with {media:product.cover.media, sizes:{default:'240px'}, attributes:{alt:name, title:name, loading:'lazy'}} %}
+                        {% else %}{% sw_icon 'placeholder' style {size:'lg'} %}{% endif %}
+                    </div>
+                    <span class="el-search__name">{{ name }}</span>
+                    {% if result.variantQuantities[product.id] is defined %}<small class="el-search__variant-quantity">{{ result.variantQuantities[product.id] }}</small>{% endif %}
+                    {% set variantOptions = result.variantOptions[product.id]|default([]) %}
+                    {% if result.variantNumbers[product.id] is defined %}{% set variantOptions = variantOptions|merge([('elSearch.variantNumber'|trans({'%number%': result.variantNumbers[product.id]}))]) %}{% endif %}
+                    {% if variantOptions|length %}<small class="el-search__variant-options">{{ variantOptions|join(' · ') }}</small>{% endif %}
+                    {% if result.unnamed[product.id] is defined %}<small class="el-search__missing-name">{{ 'elSearch.missingProductName'|trans }}</small>{% endif %}
+                </a>
+                <div class="el-search__card-bottom">
+                    {% sw_include '@ShopwareMeilisearch/storefront/search/price.html.twig' %}
+                    {% sw_include '@ShopwareMeilisearch/storefront/search/action.html.twig' %}
+                </div>
+            </article>
+        {% endfor %}
+    </div>
+    {% if input.query == '' %}<button type="button" class="el-search__carousel-arrow el-search__carousel-arrow--next" data-el-carousel="1" aria-label="{{ 'elSearch.next'|trans }}">›</button>{% endif %}
+    </div>
+    {% if result.products|length %}{% sw_include '@ShopwareMeilisearch/storefront/search/tax-info.html.twig' %}{% endif %}
+    {% if input.query != '' and result.pages > 1 %}
+        <nav class="el-search__pagination" aria-label="{{ 'elSearch.pagination'|trans }}">
+            <button type="button" data-el-page-direction="previous" data-el-page="{{ result.page - 1 }}" {% if result.page <= 1 %}disabled{% endif %}>{{ 'elSearch.previous'|trans }}</button>
+            <span>{{ result.page }} / {{ result.pages }}</span>
+            <button type="button" data-el-page-direction="next" data-el-page="{{ result.page + 1 }}" {% if result.page >= result.pages %}disabled{% endif %}>{{ 'elSearch.next'|trans }}</button>
+        </nav>
+    {% endif %}
+</section>

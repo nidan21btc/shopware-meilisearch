@@ -1,0 +1,19 @@
+#!/bin/sh
+# EXAMPLE ONLY. Replace every path after verifying the Profihost daemon's
+# filesystem, network namespace, permissions, Python version, and resources.
+# Do not place the secret in this file or in command-line arguments.
+set -eu
+
+SEARCH_HOME=/home/REPLACE_USER/shopware-meilisearch
+PYTHON=/usr/bin/python3
+MEILI="$SEARCH_HOME/bin/meilisearch"
+DATA="$SEARCH_HOME/data"
+SOCKET="$SEARCH_HOME/run/search.sock"
+SECRET_FILE="$SEARCH_HOME/secrets/master-key"
+LAUNCHER="$SEARCH_HOME/managed_socket_search.py"
+
+# ServerCon should restart this process on failure and monitor its exit status.
+# The launcher starts the bridge beside Meilisearch within one network namespace.
+exec "$PYTHON" "$LAUNCHER" --meili "$MEILI" --data "$DATA" \
+    --socket "$SOCKET" --secret-file "$SECRET_FILE" --port 7700 \
+    --indexing-memory 512MiB --indexing-threads 2

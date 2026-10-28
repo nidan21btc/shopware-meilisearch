@@ -1,0 +1,17 @@
+<?php declare(strict_types=1);
+$root=getenv('PROJECT_ROOT')?:'';
+if(!is_file($root.'/vendor/autoload.php'))throw new RuntimeException('Set PROJECT_ROOT to a Shopware installation.');
+require $root.'/vendor/autoload.php';
+$twig=new Twig\Environment(new Twig\Loader\FilesystemLoader(dirname(__DIR__).'/src/Resources/views/storefront/search'));
+$twig->addFilter(new Twig\TwigFilter('trans',static fn(string $key):string=>['general.grossTaxInformation'=>'Prices include VAT plus shipping','general.netTaxInformation'=>'Prices exclude VAT plus shipping'][$key]??$key));
+$twig->addFilter(new Twig\TwigFilter('sw_sanitize',static fn(string $value):string=>$value));
+$shippingPage='test-page';
+$twig->addFunction(new Twig\TwigFunction('config',static function(string $key)use(&$shippingPage):?string{return $key==='core.basicInformation.shippingPaymentInfoPage'?$shippingPage:null;}));
+$twig->addFunction(new Twig\TwigFunction('path',static fn(string $route,array $args):string=>'/page/cms/'.$args['id']));
+$gross=$twig->render('tax-info.html.twig',['context'=>['taxState'=>'gross']]);
+if(!str_contains($gross,'*')||!str_contains($gross,'Prices include VAT plus shipping')||!str_contains($gross,'href="/page/cms/test-page"')||str_contains($gross,'Prices exclude'))throw new RuntimeException('Gross tax information is incorrect.');
+$net=$twig->render('tax-info.html.twig',['context'=>['taxState'=>'net']]);
+if(!str_contains($net,'Prices exclude VAT plus shipping')||str_contains($net,'Prices include'))throw new RuntimeException('Net tax information is incorrect.');
+$shippingPage=null;$without=$twig->render('tax-info.html.twig',['context'=>['taxState'=>'gross']]);
+if(str_contains($without,'<a ')||!str_contains($without,'Prices include VAT plus shipping'))throw new RuntimeException('Tax information must remain visible without a configured shipping page.');
+echo "Gross, net and missing shipping-page tax notices passed.\n";

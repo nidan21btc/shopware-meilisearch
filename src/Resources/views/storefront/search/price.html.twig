@@ -1,0 +1,31 @@
+{% set price = product.calculatedPrice %}
+{% set fromPrice = product.calculatedPrices.count > 1 %}
+{% set displayFromVariants = false %}
+{% if product.calculatedPrices.count > 0 %}{% set price = product.calculatedPrices.last %}{% endif %}
+{% if product.variantListingConfig.displayParent and product.parentId is null and product.calculatedCheapestPrice %}
+    {% set displayFromVariants = price.unitPrice != product.calculatedCheapestPrice.unitPrice %}
+    {% set price = product.calculatedCheapestPrice %}
+    {% set totalVariants = product.cheapestPriceContainer.value %}
+    {% set hasDifferentPrice = totalVariants|filter(variant => variant.default != null)|length > 0 %}
+    {% set fromPrice = fromPrice or (hasDifferentPrice and product.cheapestPrice.hasRange and totalVariants|length > 1) %}
+{% endif %}
+<div class="el-search__price">
+    {% if price %}
+        <span class="el-search__current-price">{% if fromPrice %}{{ 'listing.listingTextFrom'|trans|sw_sanitize }} {% endif %}{{ price.unitPrice|currency }}*</span>
+        {% if price.listPrice and price.listPrice.percentage > 0 and not fromPrice and not displayFromVariants %}
+            {% set beforeListPrice = 'listing.beforeListPrice'|trans|trim %}
+            {% set afterListPrice = 'listing.afterListPrice'|trans|trim %}
+            <span class="el-search__list-price">
+                {% if beforeListPrice %}{{ beforeListPrice|sw_sanitize }} {% endif %}
+                {% if beforeListPrice or afterListPrice %}{{ price.listPrice.price|currency }}{% else %}<s>{{ price.listPrice.price|currency }}</s>{% endif %}
+                {% if afterListPrice %} {{ afterListPrice|sw_sanitize }}{% endif %}
+                <span>{{ 'detail.listPricePercentage'|trans({'%price%':price.listPrice.percentage})|sw_sanitize }}</span>
+            </span>
+        {% endif %}
+        {% if price.regulationPrice %}<span class="el-search__regulation-price">{{ 'general.listPricePreviously'|trans({'%price%':price.regulationPrice.price|currency})|sw_sanitize }}</span>{% endif %}
+        {% if price.referencePrice and result.referenceUnits[product.id] is defined %}
+            {% set referenceUnit = result.referenceUnits[product.id] %}
+            <small>{{ price.referencePrice.price|currency }} / {{ referenceUnit.amount }} {{ referenceUnit.unit }}</small>
+        {% endif %}
+    {% endif %}
+</div>

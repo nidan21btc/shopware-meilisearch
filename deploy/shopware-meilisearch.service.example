@@ -1,0 +1,31 @@
+[Unit]
+Description=Shopware local product search
+After=network.target
+
+[Service]
+Type=simple
+User=meilisearch
+Group=meilisearch
+Environment=MEILI_ENV=production
+Environment=MEILI_HTTP_ADDR=127.0.0.1:7700
+Environment=MEILI_DB_PATH=/var/lib/shopware-meilisearch
+Environment=MEILI_NO_ANALYTICS=true
+# Example limits; adjust to the available server resources after load testing.
+Environment=MEILI_MAX_INDEXING_MEMORY=1GiB
+Environment=MEILI_MAX_INDEXING_THREADS=2
+# Contains MEILI_MASTER_KEY; readable only by root and the service account.
+EnvironmentFile=/etc/shopware-meilisearch/meilisearch.env
+ExecStart=/usr/local/bin/meilisearch --no-analytics
+Restart=on-failure
+RestartSec=5
+# Restrict ingress and egress to loopback when supported by systemd and eBPF.
+IPAddressDeny=any
+IPAddressAllow=localhost
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/shopware-meilisearch
+
+[Install]
+WantedBy=multi-user.target
