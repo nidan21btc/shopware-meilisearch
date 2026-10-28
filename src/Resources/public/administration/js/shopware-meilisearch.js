@@ -99,7 +99,10 @@ Shopware.Component.register('sw-meilisearch-field-list', {
         <ol class="sw-meilisearch-config__ordered-list">
           <li v-for="(field, index) in value" :key="field" class="sw-meilisearch-config__item">
             <span class="sw-meilisearch-config__item-position" aria-hidden="true">{{ index + 1 }}.</span>
-            <span class="sw-meilisearch-config__item-name">{{ fieldLabel(field) }}</span>
+            <span class="sw-meilisearch-config__item-name">
+              <span>{{ fieldLabel(field) }}</span>
+              <small class="sw-meilisearch-config__item-technical">{{ field }}</small>
+            </span>
             <div class="sw-meilisearch-config__item-actions">
               <sw-button size="small" :disabled="disabled || index === 0" :aria-label="fieldLabel(field) + ' nach oben'" @click="move(index, -1)">↑</sw-button>
               <sw-button size="small" :disabled="disabled || index === value.length - 1" :aria-label="fieldLabel(field) + ' nach unten'" @click="move(index, 1)">↓</sw-button>
@@ -110,7 +113,7 @@ Shopware.Component.register('sw-meilisearch-field-list', {
         <div class="sw-meilisearch-config__add-row">
           <label>Standardfeld hinzufügen
             <select v-model="selectedField" :disabled="disabled || !availableFields.length" class="sw-meilisearch-config__input">
-              <option value="">Feld auswählen</option><option v-for="entry in availableFields" :key="entry[0]" :value="entry[0]">{{ entry[1] }}</option>
+              <option value="">Feld auswählen</option><option v-for="entry in availableFields" :key="entry[0]" :value="entry[0]">{{ entry[1] }} ({{ entry[0] }})</option>
             </select>
           </label>
           <sw-button :disabled="disabled || !selectedField || value.length >= 64" @click="addStandard">Hinzufügen</sw-button>
