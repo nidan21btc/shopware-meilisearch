@@ -15,6 +15,7 @@ final class SearchRequestGuard implements EventSubscriberInterface
 {
     private const ATTRIBUTE = '_shopware_meilisearch_lease';
     private const TTL = 120;
+    private const LOCK_WAIT_NS = 100_000_000;
     public function __construct(private readonly string $directory, private readonly int $concurrency = 2, private readonly int $globalRate = 2, private readonly int $clientRate = 2, private readonly ?AdmissionMetrics $metrics = null) {
         if ($concurrency < 1 || $concurrency > 10 || $globalRate < 1 || $globalRate > 10 || $clientRate < 1 || $clientRate > 10) throw new \InvalidArgumentException('Search admission limits must be between 1 and 10.');
     }
@@ -49,8 +50,13 @@ final class SearchRequestGuard implements EventSubscriberInterface
             $mask = umask(0077);
             try { $lock = @fopen($path, 'c+'); } finally { umask($mask); }
             if (!$lock) throw new \RuntimeException();
-            // Never queue PHP workers behind another admission check.
-            if (!flock($lock, LOCK_EX | LOCK_NB)) return $this->denied(429, 'limiter_busy');
+            // Allow brief contention between simultaneous visitors, but bound
+            // worker occupancy if another process stalls while holding the lock.
+            $deadline = hrtime(true) + self::LOCK_WAIT_NS;
+            while (!flock($lock, LOCK_EX | LOCK_NB)) {
+                if (hrtime(true) >= $deadline) return $this->denied(429, 'limiter_busy');
+                usleep(1000);
+            }
             if (fstat($lock)['size'] > 262144) throw new \RuntimeException();
             $text = stream_get_contents($lock);
             $state = $text === '' ? [] : json_decode($text, true, 16, JSON_THROW_ON_ERROR);

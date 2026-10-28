@@ -32,6 +32,22 @@ try {
  verify($shared->enter($r('192.0.2.51'))?->getStatusCode()===429,'Configured capacity must reject an eleventh active request');
  foreach($active as $q)$shared->release($q);
  $q=$r('192.0.2.51');verify($shared->enter($q)===null,'Configured capacity must recover after completion');$shared->release($q);
+ if (function_exists('pcntl_fork')) {
+  file_put_contents($root.'/admission.json','{}');
+  $pid=pcntl_fork();
+  if ($pid===0) {
+   $held=fopen($root.'/admission.json','c+'); flock($held,LOCK_EX); touch($root.'/lock-ready');
+   usleep(30000); flock($held,LOCK_UN); fclose($held); exit(0);
+  }
+  $until=microtime(true)+2; while(!is_file($root.'/lock-ready') && microtime(true)<$until) usleep(1000);
+  verify(is_file($root.'/lock-ready'),'Child must acquire admission lock');
+  $q=$r('192.0.2.92'); verify($shared->enter($q)===null,'Brief lock contention must not reject a visitor');
+  $shared->release($q); pcntl_waitpid($pid,$status); verify(pcntl_wexitstatus($status)===0,'Lock holder exited'); unlink($root.'/lock-ready');
+  $held=fopen($root.'/admission.json','c+'); flock($held,LOCK_EX); $start=hrtime(true);
+  $result=$shared->enter($r('192.0.2.93')); $elapsed=(hrtime(true)-$start)/1e6;
+  flock($held,LOCK_UN); fclose($held);
+  verify($result?->getStatusCode()===429 && $elapsed>=80 && $elapsed<500,'Stalled lock must be rejected after a bounded wait');
+ }
  file_put_contents($root.'/admission.json','broken');verify($guard->enter($r('192.0.2.88'))?->getStatusCode()===503,'Invalid shared state must fail closed');
  $secret=$root.'/secret';file_put_contents($secret,str_repeat('a',64)."\n");chmod($secret,0600);verify((string)new Secret('', $secret)===str_repeat('a',64),'Protected secret file must load without trailing whitespace');
  chmod($secret,0644);try{(string)new Secret('', $secret);throw new RuntimeException('Unsafe secret accepted');}catch(RuntimeException $e){verify(str_contains($e->getMessage(),'not protected'),'Wrong failure');}

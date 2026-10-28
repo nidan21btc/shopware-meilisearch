@@ -72,7 +72,7 @@ try {
    if($pid===0) {
     $parallel=new SearchRequestGuard($root.'/parallel',5,10,10,$metrics);
     $q=$request('192.0.2.50');$until=microtime(true)+5;
-    do {$denied=$parallel->enter($q);if($denied===null)break;usleep(10000);}while(microtime(true)<$until);
+    $denied=$parallel->enter($q);
     if($denied!==null)exit(2);
     touch($root.'/ready-'.$i);
     while(!is_file($root.'/release') && microtime(true)<$until)usleep(1000);
