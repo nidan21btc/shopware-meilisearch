@@ -107,8 +107,10 @@
 .sw-meilisearch-config__item-name {
     display: flex;
     flex: 1 1 180px;
-    flex-direction: column;
-    gap: var(--scale-size-2, 2px);
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--scale-size-2, 2px) var(--scale-size-8, 8px);
+    min-width: 0;
     overflow-wrap: anywhere;
 }
 
@@ -116,6 +118,7 @@
     color: var(--color-text-secondary-default, #52667a);
     font-size: var(--font-size-xs, 12px);
     line-height: 1.4;
+    min-width: 0;
 }
 
 .sw-meilisearch-config__item-actions {
