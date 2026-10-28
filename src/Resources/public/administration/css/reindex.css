@@ -183,6 +183,18 @@
     height: 48px;
 }
 
+.sw-meilisearch-config__field-list .sw-meilisearch-config__add-row .sw-entity-single-select {
+    margin-bottom: 0;
+}
+
+.sw-meilisearch-config__field-list .sw-meilisearch-config__add-row > label {
+    gap: var(--scale-size-8, 8px);
+}
+
+.sw-meilisearch-config__field-list .sw-meilisearch-config__add-row > label .sw-meilisearch-config__input {
+    height: 48px;
+}
+
 .sw-meilisearch-config > button,
 .sw-meilisearch-config > .mt-button {
     align-self: flex-start;

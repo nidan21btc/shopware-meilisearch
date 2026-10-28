@@ -68,7 +68,7 @@ it; for example, the overlay can be off globally and on for one channel. Editing
 an inherited field requires switching it to a channel-specific value through
 Shopware's inheritance control. Save settings before requesting a rebuild.
 
-- **Durchsuchbare Indexfelder:** Select standard fields or existing custom fields,
+- **Durchsuchbare Indexfelder:** Select standard fields or existing custom fields and click **Hinzufügen**,
   then use the arrows to order them. Higher entries have higher attribute-ranking
   priority. Empty saved configuration means the standard selection; it is not
   written merely by opening the screen. The reset button restores that default.

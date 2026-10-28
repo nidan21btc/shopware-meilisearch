@@ -89,7 +89,7 @@ Shopware.Component.register('sw-meilisearch-field-list', {
     inject: ['repositoryFactory'],
     props: {value: {type: Array, required: true}, disabled: {type: Boolean, default: false}},
     emits: ['update:value'],
-    data() { return {selectedField: '', customFieldId: null, customError: ''}; },
+    data() { return {selectedField: '', customFieldId: null, customError: '', customBusy: false}; },
     computed: {
         availableFields() { return Object.entries(indexFieldLabels).filter(([key]) => !this.value.includes(key)); },
     },
@@ -119,7 +119,8 @@ Shopware.Component.register('sw-meilisearch-field-list', {
           <sw-button :disabled="disabled || !selectedField || value.length >= 64" @click="addStandard">Hinzufügen</sw-button>
         </div>
         <div class="sw-meilisearch-config__add-row">
-          <sw-entity-single-select entity="custom_field" label="Produkt-Zusatzfeld hinzufügen" :value="customFieldId" :disabled="disabled || value.length >= 64" @update:value="addCustom" />
+          <sw-entity-single-select entity="custom_field" label="Produkt-Zusatzfeld hinzufügen" :value="customFieldId" :disabled="disabled || customBusy || value.length >= 64" @update:value="customFieldId = $event; customError = ''" />
+          <sw-button :disabled="disabled || customBusy || !customFieldId || value.length >= 64" aria-label="Produkt-Zusatzfeld hinzufügen" @click="addCustom">Hinzufügen</sw-button>
         </div>
         <p v-if="customError" role="alert" class="sw-meilisearch-config__error">{{ customError }}</p>
         <p class="sw-meilisearch-config__help">Zusatzfelder müssen Produkten zugeordnet sein; es werden sprachabhängige skalare Werte indiziert.</p>
@@ -129,17 +130,21 @@ Shopware.Component.register('sw-meilisearch-field-list', {
         move(index, delta) { const next = [...this.value]; const target = index + delta; if (target < 0 || target >= next.length) return; [next[index], next[target]] = [next[target], next[index]]; this.$emit('update:value', next); },
         remove(index) { if (this.value.length <= 1) return; this.$emit('update:value', this.value.filter((_, i) => i !== index)); },
         addStandard() { if (this.selectedField && !this.value.includes(this.selectedField) && this.value.length < 64) this.$emit('update:value', [...this.value, this.selectedField]); this.selectedField = ''; },
-        async addCustom(id) {
-            this.customFieldId = id; this.customError = '';
-            if (!id) return;
+        async addCustom() {
+            if (this.disabled || this.customBusy || !this.customFieldId || this.value.length >= 64) return;
+            const id = this.customFieldId;
+            this.customError = ''; this.customBusy = true;
             try {
                 const field = await this.repositoryFactory.create('custom_field').get(id, Shopware.Context.api);
+                if (this.disabled || this.value.length >= 64) return;
                 const name = field && field.name;
                 if (!/^[a-zA-Z0-9_]{1,128}$/.test(name || '')) throw new Error('invalid');
                 const key = 'customFields.' + name;
-                if (!this.value.includes(key) && this.value.length < 64) this.$emit('update:value', [...this.value, key]);
+                if (this.value.includes(key)) { this.customError = 'Dieses Zusatzfeld ist bereits ausgewählt.'; return; }
+                this.$emit('update:value', [...this.value, key]);
+                this.customFieldId = null;
             } catch (_) { this.customError = 'Das Zusatzfeld konnte nicht geladen werden. Bitte Berechtigungen prüfen.'; }
-            finally { this.customFieldId = null; }
+            finally { this.customBusy = false; }
         },
     },
 });
