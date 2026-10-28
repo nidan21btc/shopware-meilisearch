@@ -268,3 +268,44 @@ Shopware.Component.register('sw-meilisearch-query-suggestions', {
         addLocale() { if (!this.localeValid) return; this.locale = this.newLocale; this.newLocale = ''; },
     },
 });
+
+Shopware.Component.register('sw-meilisearch-featured-products', {
+    props: {value: {type: String, default: ''}, disabled: {type: Boolean, default: false}},
+    emits: ['update:value'],
+    data() { return {locale: 'de-DE', newLocale: '', productId: null}; },
+    computed: {
+        parsed() {
+            const x = parseSetting(this.value, {}, 'object');
+            if (x.valid && Object.values(x.data).some(ids => !Array.isArray(ids) || ids.length > 10 || new Set(ids).size !== ids.length || ids.some(id => typeof id !== 'string' || !/^[a-f0-9]{32}$/.test(id)))) x.valid = false;
+            return x;
+        },
+        locales() { return [...new Set([...localeKeys(this.parsed.data), this.locale])]; },
+        products() { return this.parsed.data[this.locale] || []; },
+        localeValid() { return /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})+$/.test(this.newLocale); },
+        canAdd() { return !this.disabled && this.productId && !this.products.includes(this.productId) && this.products.length < 10; },
+    },
+    template: `
+      <div class="sw-meilisearch-config">
+        <template v-if="parsed.valid">
+          <p class="sw-meilisearch-config__help">Diese Produkte erscheinen beim Öffnen der Suche, soweit sie im Verkaufskanal sichtbar sind. Je Sprache können bis zu zehn Produkte ausgewählt werden. Änderungen speichern.</p>
+          <label>Sprache auswählen <select v-model="locale" class="sw-meilisearch-config__input" @change="productId = null"><option v-for="item in locales" :key="item" :value="item">{{ item }}</option></select></label>
+          <div v-for="id in products" :key="id" class="sw-meilisearch-config__item sw-meilisearch-config__unit">
+            <sw-entity-single-select entity="product" :value="id" :disabled="true" label="Startprodukt" />
+            <sw-button :disabled="disabled" aria-label="Startprodukt entfernen" @click="remove(id)">Entfernen</sw-button>
+          </div>
+          <div class="sw-meilisearch-config__unit-add">
+            <sw-entity-single-select entity="product" :value="productId" :disabled="disabled || products.length >= 10" label="Produkt auswählen" @update:value="productId = $event" />
+            <sw-button :disabled="!canAdd" @click="add">Produkt hinzufügen</sw-button>
+          </div>
+          <p v-if="products.length >= 10" class="sw-meilisearch-config__help">Für diese Sprache sind bereits zehn Produkte ausgewählt.</p>
+          <p v-else-if="productId && products.includes(productId)" class="sw-meilisearch-config__help">Dieses Produkt ist bereits ausgewählt.</p>
+          <div class="sw-meilisearch-config__add-row"><label>Weitere Sprachkennung <input v-model.trim="newLocale" :disabled="disabled" class="sw-meilisearch-config__input" placeholder="z. B. nl-NL"></label><sw-button :disabled="disabled || !localeValid" @click="addLocale">Sprache auswählen</sw-button></div>
+        </template>
+        <template v-else><p role="alert" class="sw-meilisearch-config__error">Die bestehende Einstellung ist ungültig oder enthält mehr als zehn Produkte je Sprache. Bitte korrigieren; sie wird nicht automatisch überschrieben.</p><textarea class="sw-meilisearch-config__input" :value="value" :disabled="disabled" @input="$emit('update:value', $event.target.value)"></textarea></template>
+      </div>`,
+    methods: {
+        add() { if (!this.canAdd) return; this.$emit('update:value', JSON.stringify({...this.parsed.data, [this.locale]: [...this.products, this.productId]})); this.productId = null; },
+        remove(id) { if (this.disabled) return; this.$emit('update:value', JSON.stringify({...this.parsed.data, [this.locale]: this.products.filter(product => product !== id)})); },
+        addLocale() { if (!this.localeValid) return; this.locale = this.newLocale; this.newLocale = ''; this.productId = null; },
+    },
+});

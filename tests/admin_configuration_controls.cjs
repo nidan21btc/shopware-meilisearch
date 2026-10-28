@@ -23,12 +23,12 @@ const unitB = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
   },{unitA,unitB});
   await page.addScriptTag({content:script});
   await page.evaluate(() => {
-   const root={data(){return {global:'', language:JSON.stringify({'en-GB':['name','customFields.legacy_field']}), units:JSON.stringify({[window.fixture.unitA]:{symbol:'ml',factor:1}}), suggestions:JSON.stringify({'en-GB':['flower']}),disabled:false};},
-    template:`<div><section id="global"><sw-meilisearch-index-fields v-model:value="global" :disabled="disabled" /></section><section id="language"><sw-meilisearch-language-fields v-model:value="language" :disabled="disabled" /></section><section id="units"><sw-meilisearch-quantity-units v-model:value="units" :disabled="disabled" /></section><section id="suggestions"><sw-meilisearch-query-suggestions v-model:value="suggestions" :disabled="disabled" /></section></div>`};
+   const root={data(){return {global:'', language:JSON.stringify({'en-GB':['name','customFields.legacy_field']}), units:JSON.stringify({[window.fixture.unitA]:{symbol:'ml',factor:1}}), suggestions:JSON.stringify({'en-GB':['flower']}), featured:JSON.stringify({'en-GB':[window.fixture.unitA]}),disabled:false};},
+    template:`<div><section id="global"><sw-meilisearch-index-fields v-model:value="global" :disabled="disabled" /></section><section id="language"><sw-meilisearch-language-fields v-model:value="language" :disabled="disabled" /></section><section id="units"><sw-meilisearch-quantity-units v-model:value="units" :disabled="disabled" /></section><section id="suggestions"><sw-meilisearch-query-suggestions v-model:value="suggestions" :disabled="disabled" /></section><section id="featured"><sw-meilisearch-featured-products v-model:value="featured" :disabled="disabled" /></section></div>`};
    const app=Vue.createApp(root);
    for (const [name,component] of Object.entries(window.fixture.components)) app.component(name,component);
    app.component('sw-button',{props:['disabled'],emits:['click'],template:'<button :disabled="disabled" @click="$emit(\'click\')"><slot/></button>'});
-   app.component('sw-entity-single-select',{props:['value','disabled','label','entity'],emits:['update:value'],template:`<label class="entity">{{ label }}<select :value="value || ''" :disabled="disabled" @change="$emit('update:value',$event.target.value || null)"><option value="">Auswählen</option><template v-if="entity === 'unit'"><option :value="unitA">Milliliter</option><option :value="unitB">Liter</option></template><option v-else value="custom-id">Farbhinweis</option></select></label>`,computed:{unitA(){return window.fixture.unitA},unitB(){return window.fixture.unitB}}});
+   app.component('sw-entity-single-select',{props:['value','disabled','label','entity'],emits:['update:value'],template:`<label class="entity">{{ label }}<select :value="value || ''" :disabled="disabled" @change="$emit('update:value',$event.target.value || null)"><option value="">Auswählen</option><template v-if="entity === 'unit'"><option :value="unitA">Milliliter</option><option :value="unitB">Liter</option></template><template v-else-if="entity === 'product'"><option :value="unitA">Produkt A</option><option :value="unitB">Produkt B</option></template><option v-else value="custom-id">Farbhinweis</option></select></label>`,computed:{unitA(){return window.fixture.unitA},unitB(){return window.fixture.unitB}}});
    app.provide('repositoryFactory',{create(entity){return {get:async id=>entity==='unit'?{translated:{shortCode:id===window.fixture.unitB?'l':'ml'}}:{name:'fixture_field'}}}});
    window.fixture.vm=app.mount('#app');
   });
@@ -62,6 +62,21 @@ const unitB = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
   await page.waitForFunction(()=>document.querySelector('#units .sw-meilisearch-config__unit-add select.sw-meilisearch-config__input').value==='l');
   await page.locator('#units').getByRole('button',{name:'Zuordnung hinzufügen'}).click();
   const units=JSON.parse(await page.evaluate(()=>window.fixture.vm.units));assert.deepEqual(units[unitA],{symbol:'ml',factor:1});assert.deepEqual(units[unitB],{symbol:'l',factor:1});
+  assert.deepEqual(JSON.parse(await page.evaluate(()=>window.fixture.vm.featured)),{'en-GB':[unitA]},'Featured products must not change on load');
+  await page.locator('#featured .sw-meilisearch-config__unit-add select').selectOption(unitB);
+  await page.locator('#featured').getByRole('button',{name:'Produkt hinzufügen'}).click();
+  assert.deepEqual(JSON.parse(await page.evaluate(()=>window.fixture.vm.featured)),{'en-GB':[unitA],'de-DE':[unitB]});
+  await page.locator('#featured .sw-meilisearch-config__unit-add select').selectOption(unitB);
+  assert(await page.locator('#featured').getByRole('button',{name:'Produkt hinzufügen'}).isDisabled(),'Duplicate products cannot be added');
+  await page.locator('#featured').getByLabel('Sprache auswählen').first().selectOption('en-GB');
+  await page.locator('#featured').getByRole('button',{name:'Startprodukt entfernen'}).click();
+  assert.deepEqual(JSON.parse(await page.evaluate(()=>window.fixture.vm.featured)),{'en-GB':[],'de-DE':[unitB]});
+  await page.evaluate(()=>{window.fixture.vm.featured=JSON.stringify({'de-DE':Array.from({length:10},(_,i)=>i.toString(16).padStart(32,'0'))})});
+  await page.locator('#featured').getByLabel('Sprache auswählen').first().selectOption('de-DE');
+  assert(await page.locator('#featured .sw-meilisearch-config__unit-add select').isDisabled(),'The per-language limit is enforced');
+  await page.evaluate(()=>{window.fixture.vm.featured='{invalid'});
+  assert(await page.locator('#featured [role=alert]').isVisible());
+  assert.equal(await page.locator('#featured textarea').inputValue(),'{invalid');
   await page.locator('#suggestions textarea').fill('Rose\nBlume');
   const suggestions=JSON.parse(await page.evaluate(()=>window.fixture.vm.suggestions));assert.deepEqual(suggestions,{'en-GB':['flower'],'de-DE':['Rose','Blume']});
   const raw=await page.evaluate(()=>({fields:window.fixture.vm.global,languages:window.fixture.vm.language,units:window.fixture.vm.units}));

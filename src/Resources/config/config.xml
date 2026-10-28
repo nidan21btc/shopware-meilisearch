@@ -34,11 +34,11 @@
             <label>Suchvorschläge je Sprache</label>
             <helpText>Optionale Vorschläge beim Öffnen der Suche; ein Eintrag pro Zeile.</helpText>
         </component>
-        <input-field type="textarea">
+        <component name="sw-meilisearch-featured-products">
             <name>featuredProductIds</name>
-            <label>Startprodukte je Sprache als JSON</label>
-            <helpText>Leer = keine vordefinierten Startprodukte. Beispiel: {"de-DE": ["PRODUKT_UUID"], "en-GB": []}. Je Sprache bis zu zehn Produkt-UUIDs; eine leere Liste deaktiviert dort die Vorgaben. Nur aktuell sichtbare Produkte der Sprache werden angezeigt.</helpText>
-        </input-field>
+            <label>Startprodukte je Sprache</label>
+            <helpText>Je Sprache bis zu zehn Produkte auswählen. Nur aktuell sichtbare Produkte werden angezeigt.</helpText>
+        </component>
         <input-field type="textarea">
             <name>popularityWeights</name>
             <label>Produktbeliebtheit je Sprache als JSON</label>

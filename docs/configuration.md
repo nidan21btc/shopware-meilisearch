@@ -61,7 +61,7 @@ The backend button **Suchindex jetzt neu aufbauen** requests a background build
 for all enabled channels and their storefront languages. Save settings before
 clicking. It does not run an expensive build inside the browser request.
 
-### Selecting fields, units and suggestions in the administration
+### Selecting fields, units, suggestions and featured products in the administration
 
 Select a sales channel first. A channel can inherit a global setting or override
 it; for example, the overlay can be off globally and on for one channel. Editing
@@ -88,6 +88,11 @@ Shopware's inheritance control. Save settings before requesting a rebuild.
   line. At most ten valid suggestions are shown. An empty list hides suggestions
   for that language; other languages are preserved. Suggestions take effect
   without rebuilding the index.
+
+- **Startprodukte je Sprache:** Choose a language and add up to ten products
+  using Shopware’s product selector. Remove products individually; other
+  languages remain unchanged. Only products currently visible in the sales
+  channel can appear. Save changes; a rebuild is not required.
 
 The controls preserve the existing JSON storage format. Opening a control does
 not rewrite values. If an existing value cannot be interpreted safely, the UI
