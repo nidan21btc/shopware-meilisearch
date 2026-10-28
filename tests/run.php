@@ -372,6 +372,12 @@ $input = SearchInput::fromRequest(new Request(['q' => ' Bachblüten ', 'page' =>
 check($input->query === 'Bachblüten' && $input->page === 1 && $input->minPrice === null, 'Normalize search input');
 try { SearchInput::fromRequest(new Request(['minPrice' => '4.0150'])); throw new RuntimeException('Removed price filter accepted'); } catch (\Symfony\Component\HttpKernel\Exception\BadRequestHttpException) { ++$checks; }
 check($input->manufacturers === [$channel], 'Validated facet IDs');
+$root = str_repeat('c', 32); $child = str_repeat('d', 32); $otherRoot = str_repeat('e', 32);
+$selected = SearchInput::fromRequest(new Request(['q' => 'test', 'category' => [$root, $child, $otherRoot], 'manufacturer' => [$channel]]));
+$withoutRoot = $selected->withoutCategory($root);
+check($withoutRoot->categories === [$child, $otherRoot] && $withoutRoot->manufacturers === [$channel] && $withoutRoot->query === 'test', 'Ignore only the current navigation root in old or direct category filters');
+check($selected->withoutCategory($otherRoot)->categories === [$root, $child], 'A different sales channel root is treated independently');
+check($selected->withoutCategory(str_repeat('f', 32)) === $selected, 'Keep search input unchanged when its root is not selected');
 check(Discovery::suggestions('{"de-DE":["schutz"],"en-GB":["care"]}', 'en-GB') === ['care'], 'Suggestions stay in their configured language');
 check(Discovery::suggestions('{"de-DE":[]}', 'de-DE') === [], 'An empty list suppresses suggestions');
 check(Discovery::suggestions('{broken', 'de-DE') === [], 'Invalid suggestion configuration does not break search');
