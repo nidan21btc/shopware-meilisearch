@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Store the local search connection, request limits and restricted application
+  keys in a private plugin database table, with a privileged admin control.
+- Import legacy environment configuration and fail closed on copied installations.
+
 - Add sales-channel-aware administration controls for ordered search fields,
   per-language overrides, existing Shopware units and multilingual suggestions;
   preserve the underlying JSON configuration and invalid existing values.

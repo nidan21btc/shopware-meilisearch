@@ -10,6 +10,13 @@ This guide installs the **separate Meilisearch Community Edition service** neede
 by the plugin. It does not install another MySQL/MariaDB database. Meilisearch
 stores its search indexes in its own persistent data directory.
 
+Plugin 0.3 can store the connection, limits and restricted application keys in
+Shopware's database. The master key still belongs to the service. Follow the
+database-configuration and migration steps in [Installation](installation.md)
+after provisioning; the environment examples below can be used for the initial
+import but need not remain configured afterward. Database backups contain the
+restricted application keys in plaintext.
+
 Choose one service model, then complete the shared key/configuration and acceptance
 steps. The commands describe a **new instance**. If a service, account, secret or
 data directory already exists, inspect it before adapting these steps; do not

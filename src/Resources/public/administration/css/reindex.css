@@ -5,6 +5,12 @@
     color: var(--color-text-primary-default, #1b1b22);
 }
 
+.sw-meilisearch-connection > label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
 .sw-meilisearch-reindex__intro {
     display: flex;
     flex-direction: column;
