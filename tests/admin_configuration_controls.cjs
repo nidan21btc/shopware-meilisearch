@@ -1,0 +1,82 @@
+/* Synthetic Shopware form bindings: no database, account, or external service. */
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const {execFileSync} = require('node:child_process');
+const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const vue = process.env.VUE_BROWSER_FILE || require.resolve('vue/dist/vue.global.prod.js');
+const root = path.join(__dirname, '..');
+const script = fs.readFileSync(path.join(root, 'src/Resources/public/administration/js/shopware-meilisearch.js'), 'utf8');
+const css = fs.readFileSync(path.join(root, 'src/Resources/public/administration/css/reindex.css'), 'utf8');
+const unitA = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+const unitB = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+(async () => {
+ const browser = await chromium.launch({headless:true,args:['--no-sandbox']});
+ try {
+  const page = await browser.newPage({viewport:{width:900,height:900}});
+  await page.setContent('<style>body{font:14px Arial;padding:20px}section{padding:20px;border:1px solid #ddd;margin-bottom:20px}button{padding:7px} .entity{display:flex;flex-direction:column}</style><div id="app"></div>');
+  await page.addStyleTag({content:css});
+  await page.addScriptTag({path:vue});
+  await page.evaluate(({unitA,unitB}) => {
+   window.fixture={components:{},unitA,unitB};
+   window.Shopware={Context:{api:{}},Component:{register(name,config){window.fixture.components[name]=config;}},Mixin:{getByName(){return {}}}};
+  },{unitA,unitB});
+  await page.addScriptTag({content:script});
+  await page.evaluate(() => {
+   const root={data(){return {global:'', language:JSON.stringify({'en-GB':['name','customFields.legacy_field']}), units:JSON.stringify({[window.fixture.unitA]:{symbol:'ml',factor:1}}), suggestions:JSON.stringify({'en-GB':['flower']}),disabled:false};},
+    template:`<div><section id="global"><sw-meilisearch-index-fields v-model:value="global" :disabled="disabled" /></section><section id="language"><sw-meilisearch-language-fields v-model:value="language" :disabled="disabled" /></section><section id="units"><sw-meilisearch-quantity-units v-model:value="units" :disabled="disabled" /></section><section id="suggestions"><sw-meilisearch-query-suggestions v-model:value="suggestions" :disabled="disabled" /></section></div>`};
+   const app=Vue.createApp(root);
+   for (const [name,component] of Object.entries(window.fixture.components)) app.component(name,component);
+   app.component('sw-button',{props:['disabled'],emits:['click'],template:'<button :disabled="disabled" @click="$emit(\'click\')"><slot/></button>'});
+   app.component('sw-entity-single-select',{props:['value','disabled','label','entity'],emits:['update:value'],template:`<label class="entity">{{ label }}<select :value="value || ''" :disabled="disabled" @change="$emit('update:value',$event.target.value || null)"><option value="">Auswählen</option><template v-if="entity === 'unit'"><option :value="unitA">Milliliter</option><option :value="unitB">Liter</option></template><option v-else value="custom-id">Farbhinweis</option></select></label>`,computed:{unitA(){return window.fixture.unitA},unitB(){return window.fixture.unitB}}});
+   app.provide('repositoryFactory',{create(entity){return {get:async id=>entity==='unit'?{translated:{shortCode:id===window.fixture.unitB?'l':'ml'}}:{name:'fixture_field'}}}});
+   window.fixture.vm=app.mount('#app');
+  });
+  await page.locator('#global li').first().waitFor();
+  assert.equal(await page.evaluate(()=>window.fixture.vm.global),'','Defaults must not be written on load');
+  assert.deepEqual(JSON.parse(await page.evaluate(()=>window.fixture.vm.units)),{[unitA]:{symbol:'ml',factor:1}},'Existing unit mapping must not change on load');
+  assert.deepEqual(JSON.parse(await page.evaluate(()=>window.fixture.vm.language)),{'en-GB':['name','customFields.legacy_field']},'Other language data must not change on load');
+  if (process.env.UI_SCREENSHOT_DIR) await page.screenshot({path:path.join(process.env.UI_SCREENSHOT_DIR,'admin-config-desktop.png'),fullPage:true});
+  await page.locator('#global select').first().selectOption('metaTitle');
+  await page.locator('#global').getByRole('button',{name:'Hinzufügen',exact:true}).click();
+  let fields=JSON.parse(await page.evaluate(()=>window.fixture.vm.global));
+  assert.equal(fields.at(-1),'metaTitle');assert.equal(fields[0],'productNumber');
+  await page.locator('#global').getByRole('button',{name:'Meta-Titel nach oben'}).click();
+  fields=JSON.parse(await page.evaluate(()=>window.fixture.vm.global));assert.equal(fields.at(-2),'metaTitle');
+  await page.locator('#global .entity select').selectOption('custom-id');
+  await page.waitForFunction(()=>JSON.parse(window.fixture.vm.global).includes('customFields.fixture_field'));
+  await page.locator('#language').getByLabel('Sprache auswählen').selectOption('en-GB');
+  assert(await page.locator('#language').getByText('Zusatzfeld: legacy_field').isVisible(),'Existing custom field remains visible');
+  await page.locator('#language select').nth(1).selectOption('ean');
+  await page.locator('#language').getByRole('button',{name:'Hinzufügen',exact:true}).click();
+  let language=JSON.parse(await page.evaluate(()=>window.fixture.vm.language));assert.deepEqual(language['en-GB'],['name','customFields.legacy_field','ean']);
+  await page.locator('#language').getByLabel('Weitere Sprachkennung').fill('nl-NL');
+  await page.locator('#language').getByRole('button',{name:'Sprache auswählen',exact:true}).click();
+  await page.locator('#language').getByRole('button',{name:'Ausnahme mit Standardfeldern anlegen'}).click();
+  language=JSON.parse(await page.evaluate(()=>window.fixture.vm.language));assert(language['nl-NL'].includes('quantity'));assert.deepEqual(language['en-GB'],['name','customFields.legacy_field','ean']);
+  await page.locator('#units .sw-meilisearch-config__unit-add .entity select').selectOption(unitB);
+  await page.waitForFunction(()=>document.querySelector('#units .sw-meilisearch-config__unit-add select.sw-meilisearch-config__input').value==='l');
+  await page.locator('#units').getByRole('button',{name:'Zuordnung hinzufügen'}).click();
+  const units=JSON.parse(await page.evaluate(()=>window.fixture.vm.units));assert.deepEqual(units[unitA],{symbol:'ml',factor:1});assert.deepEqual(units[unitB],{symbol:'l',factor:1});
+  await page.locator('#suggestions textarea').fill('Rose\nBlume');
+  const suggestions=JSON.parse(await page.evaluate(()=>window.fixture.vm.suggestions));assert.deepEqual(suggestions,{'en-GB':['flower'],'de-DE':['Rose','Blume']});
+  const raw=await page.evaluate(()=>({fields:window.fixture.vm.global,languages:window.fixture.vm.language,units:window.fixture.vm.units}));
+  const php=`require $argv[1].'/src/Search/IndexFields.php'; require $argv[1].'/src/Search/QuantityUnits.php'; ShopwareMeilisearch\\Search\\IndexFields::forLocale($argv[2], $argv[3], 'en-GB'); ShopwareMeilisearch\\Search\\IndexFields::forLocale($argv[2], $argv[3], 'nl-NL'); ShopwareMeilisearch\\Search\\QuantityUnits::parse($argv[4]);`;
+  execFileSync('php',['-r',php,root,raw.fields,raw.languages,raw.units]);
+  await page.evaluate(()=>{window.fixture.vm.disabled=true});
+  assert(await page.locator('#units').getByRole('button',{name:'Zuordnung hinzufügen'}).isDisabled());
+  assert(await page.locator('#suggestions textarea').isDisabled());
+  const inheritedBefore=await page.evaluate(()=>window.fixture.vm.suggestions);
+  await page.locator('#suggestions').getByLabel('Sprache auswählen').selectOption('en-GB');
+  assert.equal(await page.locator('#suggestions textarea').inputValue(),'flower','Inherited language values remain inspectable');
+  assert.equal(await page.evaluate(()=>window.fixture.vm.suggestions),inheritedBefore,'Inspecting inherited values must not save an override');
+  const snapshot=await page.evaluate(()=>window.fixture.vm.global);
+  await page.evaluate(()=>{window.fixture.vm.disabled=false;window.fixture.vm.global='{invalid';});
+  assert(await page.locator('#global [role=alert]').isVisible());
+  assert.equal(await page.locator('#global textarea').inputValue(),'{invalid');
+  assert.notEqual(snapshot,'{invalid','Invalid data was intentionally injected, never silently replaced');
+  await page.setViewportSize({width:375,height:850});
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'No mobile horizontal overflow');
+  console.log('Configuration controls passed: defaults, priority, custom fields, languages, units, suggestions, inheritance disabling and invalid-value preservation.');
+ } finally {await browser.close();}
+})().catch(e=>{console.error(e);process.exitCode=1;});
