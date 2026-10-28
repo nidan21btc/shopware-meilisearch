@@ -167,6 +167,19 @@
     flex: 1 1 180px;
 }
 
+/* Shopware fields include a bottom margin intended for stacked forms. */
+.sw-meilisearch-config__unit-add .sw-entity-single-select {
+    margin-bottom: 0;
+}
+
+.sw-meilisearch-config__unit-add > label {
+    gap: var(--scale-size-8, 8px);
+}
+
+.sw-meilisearch-config__unit-add > label .sw-meilisearch-config__input {
+    height: 48px;
+}
+
 .sw-meilisearch-config > button,
 .sw-meilisearch-config > .mt-button {
     align-self: flex-start;
