@@ -24,7 +24,6 @@ Application credentials are separate:
 | Search | `search`, `settings.get` | Explicit published indexes only |
 | Index writer | Create/get/delete/swap indexes, update settings, add/get documents | Explicit published and `_building` names |
 | Status | `version`, `tasks.get` | Global engine task metadata; no document/search writes |
-| Feedback | Independent random HMAC secret | Query fingerprints; not an engine API credential |
 | Master | Engine administration/provisioning | Daemon and provisioning only; never configure in the plugin |
 
 Task status/version permissions are global in the engine API, so the status key
@@ -78,9 +77,6 @@ users; increasing their allowance necessarily permits a larger attacker burst.
   by locale/endpoint, and can contain sensitive visitor text. Other scripts on
   the same origin can access it. Clearing the input removes its stored value;
   no cross-device query history is implemented.
-- Optional hints contain plaintext historical terms in local configuration/indexes.
-  Keyed click feedback avoids plaintext query keys, but the secret/configuration
-  remains sensitive. Hashing/HMAC does not make all derived data non-personal.
 - Search requests are GET requests; access logs, proxies and browser history can
   contain query strings. Configure retention/redaction outside the plugin where
   required. The plugin does not implement analytics consent or automatic live

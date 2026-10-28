@@ -48,13 +48,7 @@ foreach($domains as $locale=>$domain){
  if(!in_array('keywords',$fields,true)||!in_array('name',$fields,true))throw new RuntimeException('Name and keywords are required in the test index.');
  $newFields=array_values(array_diff($fields,['quantity']));array_splice($newFields,array_search('name',$newFields,true)+1,0,['quantity']);
  $newTypo=$typo;$newTypo['disableOnAttributes']=array_values(array_unique(array_merge($typo['disableOnAttributes'],['quantity'])));
- $token='zq'.strtr(bin2hex(random_bytes(12)),'0123456789abcdef','abcdefghijklmnop');$changed=false;$extraOriginal=[];$feedbackTouched=false;
- $feedbackKey='ShopwareMeilisearch.config.queryClickFeedback';$savedFeedback=null;$hadFeedback=false;
- if($locale==='de-DE'){
-  if((int)$db->fetchOne('SELECT COUNT(*) FROM system_config WHERE configuration_key=:key AND sales_channel_id IS NOT NULL',['key'=>$feedbackKey]))throw new RuntimeException('No channel-specific feedback override allowed.');
-  $saved=$db->fetchAssociative('SELECT configuration_value FROM system_config WHERE configuration_key=:key AND sales_channel_id IS NULL',['key'=>$feedbackKey]);
-  $hadFeedback=$saved!==false;$savedFeedback=$hadFeedback?json_decode($saved['configuration_value'],true,512,JSON_THROW_ON_ERROR)['_value']:null;
- }
+ $token='zq'.strtr(bin2hex(random_bytes(12)),'0123456789abcdef','abcdefghijklmnop');$changed=false;
  try{
   $changed=true;$engine->mutate('PUT','/indexes/'.$index.'/settings/searchable-attributes',$newFields);$engine->mutate('PATCH','/indexes/'.$index.'/settings/typo-tolerance',$newTypo);$engine->mutate('PUT','/indexes/'.$index.'/settings/displayed-attributes',array_values(array_unique(array_merge($displayed,['quantityKey']))));
   $docs=$originalDocs;$amounts=[(float)$selected['first_amount'],(float)$selected['second_amount']];
@@ -74,7 +68,7 @@ foreach($domains as $locale=>$domain){
   // quantity. Give the fractional variant a clear engine-order advantage so
   // an incorrect amount promotion is observable in the rendered shop.
   $signedDocs=$decimalDocs;
-  foreach($signedDocs as $i=>&$doc){$doc['name']=$token;$doc['popularity']=$i===0?1000000:0;}unset($doc);
+  foreach($signedDocs as $i=>&$doc){$doc['name']=$token.($i===0?'':' extra');}unset($doc);
   $engine->mutate('POST','/indexes/'.$index.'/documents',$signedDocs);
   foreach(['- 1 ml','− 1 ml','+ 1 ml'] as $signed){
    $query=$token.' '.$signed;
@@ -88,29 +82,11 @@ foreach($domains as $locale=>$domain){
   // Query the synthetic keyword by itself: a quantity is language-neutral and
   // can legitimately match a product in a different language's index.
   foreach($domains as $otherLocale=>$_)if($otherLocale!==$locale){$ids=$search($otherLocale,$token,true);if(in_array($docs[0]['id'],$ids,true)||in_array($docs[1]['id'],$ids,true))throw new RuntimeException('Quantity test keyword crossed a language boundary.');}
-  if($locale==='de-DE'){
-   $candidates=$db->fetchAllAssociative("SELECT LOWER(HEX(p.id)) id,p.product_number number FROM product p JOIN product_visibility v ON v.product_id=p.id AND v.product_version_id=p.version_id WHERE p.version_id=UNHEX('0fa91ce3e96a4bc2be4bd9ce752c3425') AND p.active=1 AND p.parent_id IS NULL AND v.sales_channel_id=UNHEX(:channel) AND v.visibility>=20 AND NOT EXISTS(SELECT 1 FROM product c WHERE c.parent_id=p.id AND c.parent_version_id=p.version_id) LIMIT 100",['channel'=>$channel]);
-   foreach($candidates as $candidate){
-    $doc=$engine->request('GET','/indexes/'.$index.'/documents/'.$candidate['id'],allowMissing:true);
-    if($doc!==null&&in_array($candidate['id'],$search($locale,$candidate['number']),true)){$extraOriginal[]=$doc;if(count($extraOriginal)===3)break;}
-   }
-   if(count($extraOriginal)!==3)throw new RuntimeException('Three extra visible products required for feedback test.');
-   $extra=$extraOriginal;foreach($extra as &$doc){$doc['keywords']=$token;$doc['quantity']=['1 ml','1ml','0.001 l','0.001l'];$doc['quantityKey']='ml:1';}unset($doc);
-   $engine->mutate('POST','/indexes/'.$index.'/documents',$extra);
-   $query=$token.' 1 ml';$withoutFeedback=$search($locale,$query);$wrong=$decimalDocs[0]['id'];
-   if(count($withoutFeedback)<5||array_search($wrong,$withoutFeedback,true)<4)throw new RuntimeException('Feedback test needs four exact matches before the wrong size.');
-   if(ShopwareMeilisearch\Search\QueryClickFeedback::rerank($withoutFeedback,[$wrong=>10])===$withoutFeedback)throw new RuntimeException('Feedback fixture would not otherwise change the order.');
-   $secret=getenv('SHOPWARE_MEILISEARCH_KEY')?:'';$fingerprint=ShopwareMeilisearch\Search\QueryClickFeedback::fingerprint($locale,$query,$secret);
-   $signal=json_encode(['version'=>1,'keyCheck'=>ShopwareMeilisearch\Search\QueryClickFeedback::keyCheck($secret),'locales'=>[$locale=>[$fingerprint=>[$wrong=>10]]]],JSON_THROW_ON_ERROR);
-   $feedbackTouched=true;$config->set($feedbackKey,$signal);
-   if($search($locale,$query)!==$withoutFeedback)throw new RuntimeException('Feedback promoted an incorrect quantity.');
-  }
 
   echo $locale." quantity variants and language isolation passed.\n";
  }finally{
-  if($feedbackTouched){if($hadFeedback)$config->set($feedbackKey,$savedFeedback);else $config->delete($feedbackKey);}
-  if($changed){if($extraOriginal!==[])$engine->mutate('POST','/indexes/'.$index.'/documents',$extraOriginal);$engine->mutate('POST','/indexes/'.$index.'/documents',$originalDocs);$engine->mutate('PUT','/indexes/'.$index.'/settings/searchable-attributes',$fields);$engine->mutate('PATCH','/indexes/'.$index.'/settings/typo-tolerance',$typo);$engine->mutate('PUT','/indexes/'.$index.'/settings/displayed-attributes',$displayed);
-   foreach(array_merge($originalDocs,$extraOriginal) as $doc)if($engine->request('GET','/indexes/'.$index.'/documents/'.$doc['id'])!=$doc)throw new RuntimeException('Original index document was not restored.');
+  if($changed){$engine->mutate('POST','/indexes/'.$index.'/documents',$originalDocs);$engine->mutate('PUT','/indexes/'.$index.'/settings/searchable-attributes',$fields);$engine->mutate('PATCH','/indexes/'.$index.'/settings/typo-tolerance',$typo);$engine->mutate('PUT','/indexes/'.$index.'/settings/displayed-attributes',$displayed);
+   foreach($originalDocs as $doc)if($engine->request('GET','/indexes/'.$index.'/documents/'.$doc['id'])!=$doc)throw new RuntimeException('Original index document was not restored.');
   }
  }
 }

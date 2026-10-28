@@ -84,7 +84,7 @@ Otherwise complete its [shared credential steps](meilisearch-installation.md#sha
 They show how to obtain actual channel/language UUIDs with read-only SQL, generate
 scoped keys, and transfer only the required private files to the PHP identity.
 
-You need `search`, `index`, `status` and `feedback` application files. The master
+You need `search`, `index` and `status` application files. The master
 key stays with the daemon/provisioning administrator. Every intended published
 index follows `shopware_CHANNELUUID_LANGUAGEUUID`; include all pairs you will
 build. Missing language/index permissions will not fix themselves when you enable
@@ -120,7 +120,6 @@ SHOPWARE_MEILISEARCH_URL=http://127.0.0.1:7700
 SHOPWARE_MEILISEARCH_SEARCH_KEY_FILE=/etc/shopware-meilisearch-app/search
 SHOPWARE_MEILISEARCH_KEY_FILE=/etc/shopware-meilisearch-app/index
 SHOPWARE_MEILISEARCH_STATUS_KEY_FILE=/etc/shopware-meilisearch-app/status
-SHOPWARE_MEILISEARCH_FEEDBACK_KEY_FILE=/etc/shopware-meilisearch-app/feedback
 ```
 
 For the managed-hosting model, use its private credential paths and set
@@ -196,8 +195,8 @@ their own build requirements.
 ## 4. Configure the intended sales channel
 
 Open the plugin's **Configuration** from the extension's menu. The technical name
-is `ShopwareMeilisearch`; the label is "Shopware lokale Suche" / "Shopware local
-search". The configuration card is **Lokale Suche**. Select the intended sales
+is `ShopwareMeilisearch`; the label is "Meilisearch-Suche" / "Meilisearch
+search". The configuration card is **Meilisearch-Suche**. Select the intended sales
 channel and understand Shopware's inherited/global setting values before editing.
 
 Start with this minimal configuration:
@@ -210,7 +209,6 @@ Start with this minimal configuration:
 | Quantity units | Leave blank initially, or configure the actual unit UUID/factor if quantity search is required |
 | Synonyms | Optional; configure per locale after a basic working search |
 | Suggestions and featured products | Optional; no merchant products/suggestions are built in |
-| Popularity/historical hints/keyed feedback | Optional; leave blank for an independent first installation |
 
 Save changes before indexing. A blank optional field is not a request to supply
 sample merchant data. Consult [configuration](configuration.md) for exact JSON
@@ -344,10 +342,9 @@ Recompile themes only as required by the deployment/theme changes. Rebuild and
 recheck all affected channel/language indexes after changes to fields/settings
 or index behavior. Re-run the acceptance checks appropriate to the change.
 
-Version 0.2 introduced separate application-role keys and the independent feedback
-secret. Configure/provision these before rebuilding an older installation. There
-is no read-key fallback to master/writer. Regenerate keyed feedback with the new
-feedback secret or remove that optional configuration. New index/cutoff settings
+Version 0.2 introduced separate application-role keys. Configure/provision these
+before rebuilding an older installation. There is no read-key fallback to
+master/writer. New index/cutoff settings
 require a successful index rebuild; updating PHP source alone does not publish them.
 
 For immediate storefront rollback, disable the overlay and restore the intended

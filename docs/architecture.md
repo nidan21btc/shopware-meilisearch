@@ -38,17 +38,15 @@ visible text. `LanguageText`, `ParentTranslations` and variant-label helpers
 control language-local content rather than broadly importing fallback text.
 
 Meilisearch ranking prioritizes words, typos, proximity, attribute priority,
-exactness, optional popularity and requested sorting. Identifiers and quantities
+exactness and requested sorting. Identifiers and quantities
 have special exact-match behavior. Additional helpers handle Unicode/orthography,
 hyphen compounds, quantity representations, named variants and optional partial
 matches. `IdentifierFallback` supplements exact identifier matches through
 Shopware when necessary. `SearchService` applies these rules and current
 Shopware eligibility rather than returning the engine's response directly.
 
-Optional reviewed `queryHints` enter the index in the configured language.
-Keyed query/click feedback is applied by the application for exact normalized
-queries. Neither is collected automatically. Historical clicks are a ranking
-signal, not independent ground truth; see [evaluation](evaluation.md).
+Historical clicks used for evaluation are not independent ground truth; see
+[evaluation](evaluation.md).
 
 At most 5,000 candidate IDs are processed per search, including supplemental
 hits. Meilisearch is configured with a 250 ms search cutoff and 5,000 maximum

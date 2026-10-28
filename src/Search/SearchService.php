@@ -32,7 +32,6 @@ final class SearchService
         private readonly IdentifierFallback $identifierFallback,
         private readonly ReferenceUnitLabels $referenceUnitLabels,
         private readonly SystemConfigService $config,
-        private readonly string|\ShopwareMeilisearch\Security\Secret $signalKey,
         private readonly LoggerInterface $logger,
     ) {
     }
@@ -50,7 +49,7 @@ final class SearchService
         try {
             $corrected = new SearchInput($alternate, $input->page, $input->sort, $input->manufacturers,
                 $input->categories, $input->minPrice, $input->maxPrice, $input->includeSimilar);
-            $fallback = $this->searchOnce($corrected, $context, $input->query);
+            $fallback = $this->searchOnce($corrected, $context);
             if ($fallback['total'] > 0) {
                 $fallback['orthographyFallback'] = true;
                 return $fallback;
@@ -61,7 +60,7 @@ final class SearchService
         return $result;
     }
 
-    private function searchOnce(SearchInput $input, SalesChannelContext $context, ?string $feedbackQuery = null): array
+    private function searchOnce(SearchInput $input, SalesChannelContext $context): array
     {
         $index = Engine::indexName($context->getSalesChannelId(), $context->getLanguageId());
         // Retrieve IDs and the missing-name marker only. Context-dependent
@@ -74,13 +73,11 @@ final class SearchService
             'attributesToRetrieve' => ['id', 'unnamed', 'quantityKey'],
             'showRankingScoreDetails' => $needsTypoDetails,
             // Keep rare distinguishing terms if a multi-word query has no
-            // full match. Development-set click feedback improves in all five
-            // languages compared with requiring every word.
+            // full match.
             'matchingStrategy' => 'frequency',
         ]);
         $candidates = [];
         $quantityKey = QuantityUnits::queryKey($input->query);
-        $quantityMatchedIds = [];
         $hits = $response['hits'] ?? [];
         if ($needsTypoDetails) {
             $hits = TypoRelevance::reorder($hits);
@@ -94,7 +91,6 @@ final class SearchService
         foreach ($hits as $hit) {
             if (isset($hit['id']) && is_string($hit['id']) && preg_match('/^[a-f0-9]{32}$/D', $hit['id'])) {
                 $candidates[] = $hit['id'];
-                if ($quantityKey !== null && ($hit['quantityKey'] ?? null) === $quantityKey) $quantityMatchedIds[$hit['id']] = true;
                 if ($input->query !== '' && ($hit['unnamed'] ?? false) === true) $indexedUnnamedIds[] = $hit['id'];
             }
         }
@@ -303,31 +299,6 @@ final class SearchService
         if ($input->sort === 'relevance') {
             $positions = array_flip($candidates);
             usort($visibleIds, static fn (string $a, string $b) => $positions[$a] <=> $positions[$b]);
-            $feedbackJson = $this->config->getString('ShopwareMeilisearch.config.queryClickFeedback', $context->getSalesChannelId());
-            if ($input->query !== '' && trim($feedbackJson) !== '') {
-                try {
-                    $locale = $context->getLanguageInfo()->localeCode;
-                    $fingerprint = QueryClickFeedback::fingerprint($locale, $feedbackQuery ?? $input->query, (string) $this->signalKey);
-                    $feedback = QueryClickFeedback::parse($feedbackJson, (string) $this->signalKey);
-                    // Feedback is restricted to products from the language index.
-                    $weights = array_diff_key($feedback[$locale][$fingerprint] ?? [], array_diff_key($directUnnamed, array_fill_keys($indexedUnnamedIds, true)));
-                    // A click signal must not promote a different quantity
-                    // over an explicit quantity match.
-                    if ($quantityMatchedIds !== []) $weights = array_intersect_key($weights, $quantityMatchedIds);
-                    // Supplemental single-word hits must stay behind visible
-                    // primary matches, even when click feedback is enabled.
-                    // If filtering removes every primary hit, feedback can
-                    // still order the remaining supplemental results.
-                    if (array_intersect_key(array_fill_keys($visibleIds, true), $primaryIds) !== []) {
-                        $weights = array_intersect_key($weights, $primaryIds);
-                    }
-                    $exact = $hasSimilar && $input->includeSimilar ? $preciseIds : null;
-                    $visibleIds = QueryClickFeedback::rerank($visibleIds, $weights, $exact);
-                } catch (\Throwable $error) {
-                    // A malformed optional signal must not break normal search.
-                    $this->logger->warning('Local query feedback was ignored', ['exceptionClass' => $error::class]);
-                }
-            }
         } elseif ($input->sort === 'name-asc') {
             // Sort the labels actually shown, with this language's collation.
             // The database's shared collation can order letters differently,

@@ -22,7 +22,7 @@ provider, remote JavaScript package or cloud language model is required.
 
 Features include typo tolerance, configurable language-specific fields and
 synonyms, manufacturer/category filters, variants and quantity matching, optional
-reviewed historical signals, and retaining the latest query within the browser
+and retaining the latest query within the browser
 tab. Product cards use Shopware's cart and icon system. Voice input is offered
 only when the browser exposes an explicit local speech-recognition capability;
 there is no cloud fallback.

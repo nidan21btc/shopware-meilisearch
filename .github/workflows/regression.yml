@@ -34,6 +34,8 @@ jobs:
           php tests/search_guard.php
           php tests/admission_metrics.php
           php tests/defaults.php
+          php tests/admin_config_schema.php
+          node tests/admin_field_consistency.cjs
           python3 -m unittest discover -s tests -p 'test_*.py'
       - name: Check packaged administration asset
         run: cmp src/Resources/app/administration/src/main.js src/Resources/public/administration/js/shopware-meilisearch.js
@@ -45,11 +47,14 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Install Playwright and browsers
         run: |
-          npm install --prefix "$RUNNER_TEMP/browser" --no-save --no-package-lock playwright@1.55.0
+          npm install --prefix "$RUNNER_TEMP/browser" --no-save --no-package-lock playwright@1.55.0 vue@3.5.22
           "$RUNNER_TEMP/browser/node_modules/.bin/playwright" install --with-deps chromium firefox
       - name: Run synthetic browser regressions
         env:
           PLAYWRIGHT_MODULE: ${{ runner.temp }}/browser/node_modules/playwright
+          VUE_BROWSER_FILE: ${{ runner.temp }}/browser/node_modules/vue/dist/vue.global.prod.js
         run: |
           node tests/credentialed_page_url_browser.cjs
           node tests/remember_query_browser.cjs
+          node tests/admin_reindex_layout.cjs
+          node tests/admin_configuration_controls.cjs

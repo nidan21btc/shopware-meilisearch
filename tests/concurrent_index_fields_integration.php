@@ -41,7 +41,7 @@ $command=new IndexCommand($indexer,$container->get(CachedSalesChannelContextFact
 $oldFields=['name','productNumber'];$newFields=['productNumber','name','description'];$oldJson=json_encode($oldFields,JSON_THROW_ON_ERROR);$newJson=json_encode($newFields,JSON_THROW_ON_ERROR);
 $published=static function(string $locale)use($engine,$channel,$domains):array{
  $index=Engine::indexName($channel,$domains[$locale]['language']);$fields=$engine->request('GET','/indexes/'.$index.'/settings/searchable-attributes');
- return array_values(array_filter($fields,static fn($field)=>!in_array($field,['nameHyphenAliases','queryHints'],true)));
+ return array_values(array_filter($fields,static fn($field)=>!in_array($field,['nameHyphenAliases'],true)));
 };
 $queue='el_search_fields_probe_'.bin2hex(random_bytes(8));$taskRows=$db->fetchAllAssociative('SELECT LOWER(HEX(id)) id,status,next_execution_time,last_execution_time,updated_at FROM scheduled_task');
 if((int)$db->fetchOne("SELECT COUNT(*) FROM scheduled_task WHERE name='shopware.meilisearch.reindex'")!==1)throw new RuntimeException('One registered search task is required.');

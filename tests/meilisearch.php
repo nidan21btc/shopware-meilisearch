@@ -34,11 +34,11 @@ $search = static function (string $index, string $query) use ($engine): array {
 try {
     foreach ($indexes as $index) {
         $engine->mutate('POST', '/indexes', ['uid' => $index, 'primaryKey' => 'id']);
-        $engine->mutate('PATCH', '/indexes/' . $index . '/settings', DocumentBuilder::settings([], $fields, '', $index === $indexes[0]));
+        $engine->mutate('PATCH', '/indexes/' . $index . '/settings', DocumentBuilder::settings([], $fields));
     }
     $engine->mutate('POST', '/indexes/' . $indexes[0] . '/documents', [[
         'id' => 'one', 'groupId' => 'one', 'productNumber' => 'EL001', 'name' => 'Bachblüten Rescue',
-        'unitShortCode' => 'ml', 'customFields' => ['theme' => 'Gelassenheit'], 'description' => 'Innere Ruhe', 'queryHints' => ['Abendruhe'], 'categories' => [], 'manufacturer' => '',
+        'unitShortCode' => 'ml', 'customFields' => ['theme' => 'Gelassenheit'], 'description' => 'Innere Ruhe', 'categories' => [], 'manufacturer' => '',
     ]]);
     $engine->mutate('POST', '/indexes/' . $indexes[1] . '/documents', [[
         'id' => 'one', 'groupId' => 'one', 'productNumber' => 'EL001', 'name' => 'Flower Rescue',
@@ -49,8 +49,6 @@ try {
     $test($search($indexes[0], 'gelassen') === ['one'], 'Configured nested custom field or prefix matching failed');
     $test($search($indexes[0], 'ml') === ['one'], 'Configured unit abbreviation was not searchable');
     $test($search($indexes[1], 'ml') === [], 'Unit abbreviation leaked into another language index');
-    $test($search($indexes[0], 'abendruhe') === ['one'], 'Opt-in historical query hint was not indexed');
-    $test($search($indexes[1], 'abendruhe') === [], 'Query hint leaked into another language index');
     $test($search($indexes[1], 'gelassenheit') === [], 'German custom field leaked into English index');
     $test($search($indexes[0], 'balance') === [], 'English description leaked into German index');
     $test($search($indexes[1], 'calm') === ['one'], 'English custom field not searchable');

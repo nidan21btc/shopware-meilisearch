@@ -360,7 +360,7 @@ sudo python3 /opt/shopware-meilisearch/create_scoped_keys.py \
 
 Append further published index names after `--indexes` as separate arguments.
 The helper also authorizes the matching `_building` names for the writer; do not
-pass those names yourself. It produces `search`, `index`, `status`, `feedback` and
+pass those names yourself. It produces `search`, `index`, `status` and
 `key-ids.json` without printing key values.
 
 For managed model B, run the same helper as the service account with its socket:
@@ -377,7 +377,7 @@ python3 "$SEARCH_HOME/create_scoped_keys.py" \
 The helper's `managed_socket_search.py` import must be beside it even for a direct
 TCP setup. The search key cannot write indexes, the writer is limited to assigned
 published/building indexes, the separate status key reads version/global task
-metadata, and the feedback secret is independent. The master is never a plugin key.
+metadata. The master is never a plugin key.
 Generated API keys have no automatic expiration; plan rotation/revocation using
 private key IDs. See [security](security.md).
 
@@ -390,7 +390,7 @@ identity. Keep the raw master and systemd configuration root-only:
 SHOP_USER=shopware
 SHOP_GROUP="$(id -gn "$SHOP_USER")"
 sudo install -d -o "$SHOP_USER" -g "$SHOP_GROUP" -m 0700 /etc/shopware-meilisearch-app
-for role in search index status feedback; do
+for role in search index status; do
   sudo install -o "$SHOP_USER" -g "$SHOP_GROUP" -m 0600 \
     "/etc/shopware-meilisearch/provisioned/$role" \
     "/etc/shopware-meilisearch-app/$role"
@@ -417,7 +417,6 @@ SHOPWARE_MEILISEARCH_URL=http://127.0.0.1:7700
 SHOPWARE_MEILISEARCH_SEARCH_KEY_FILE=/etc/shopware-meilisearch-app/search
 SHOPWARE_MEILISEARCH_KEY_FILE=/etc/shopware-meilisearch-app/index
 SHOPWARE_MEILISEARCH_STATUS_KEY_FILE=/etc/shopware-meilisearch-app/status
-SHOPWARE_MEILISEARCH_FEEDBACK_KEY_FILE=/etc/shopware-meilisearch-app/feedback
 ```
 
 For model B, use the corresponding managed-account paths instead:
@@ -428,7 +427,6 @@ SHOPWARE_MEILISEARCH_SOCKET=/home/SHOP_USER/shopware-meilisearch/run/search.sock
 SHOPWARE_MEILISEARCH_SEARCH_KEY_FILE=/home/SHOP_USER/shopware-meilisearch/credentials/search
 SHOPWARE_MEILISEARCH_KEY_FILE=/home/SHOP_USER/shopware-meilisearch/credentials/index
 SHOPWARE_MEILISEARCH_STATUS_KEY_FILE=/home/SHOP_USER/shopware-meilisearch/credentials/status
-SHOPWARE_MEILISEARCH_FEEDBACK_KEY_FILE=/home/SHOP_USER/shopware-meilisearch/credentials/feedback
 ```
 
 Protect the shop's environment files and regenerate its compiled environment if

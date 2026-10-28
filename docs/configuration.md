@@ -6,7 +6,9 @@
 > own risk. It is provided "as is", without warranty to the extent permitted by law.
 > No support, maintenance, updates or bug fixes are promised.
 
-Backend settings live under `ShopwareMeilisearch.config`. Use Shopware's normal
+Open the configuration from **Settings → Extensions → Meilisearch search** or from the
+extension list. Both links open the same settings, subject to Shopware plugin
+maintenance permission. Backend settings live under `ShopwareMeilisearch.config`. Use Shopware's normal
 sales-channel inheritance deliberately: the selected channel determines which
 settings the indexer and storefront see. Locale codes such as `de-DE` are different
 from language UUIDs; JSON settings use locale codes, index names use UUIDs.
@@ -20,7 +22,6 @@ from language UUIDs; JSON settings use locale codes, index names use UUIDs.
 | `SHOPWARE_MEILISEARCH_KEY_FILE` | empty | Protected index-writer key file |
 | `SHOPWARE_MEILISEARCH_SEARCH_KEY_FILE` | empty | Protected search-only key file |
 | `SHOPWARE_MEILISEARCH_STATUS_KEY_FILE` | empty | Protected version/task-read key file |
-| `SHOPWARE_MEILISEARCH_FEEDBACK_KEY_FILE` | empty | Independent keyed-feedback secret file |
 | `SHOPWARE_MEILISEARCH_CONCURRENCY` | `2` | Installation-wide simultaneous computations; integer 1–10 |
 | `SHOPWARE_MEILISEARCH_GLOBAL_RATE` | `2` | Global token refill rate in requests/second; integer 1–10 |
 | `SHOPWARE_MEILISEARCH_CLIENT_RATE` | `2` | Per-IP short-term refill rate; integer 1–10 |
@@ -44,22 +45,72 @@ workers, database and host memory before using it. See [security](security.md).
 
 ## Administration fields
 
-| Field | Format and effect | Rebuild required? |
-| --- | --- | --- |
-| `enabled` | Boolean; overlay is disabled by default | Build before first enabling |
-| `indexFields` | Ordered JSON list of searchable fields | Yes |
-| `indexFieldsByLanguage` | Locale → field-list overrides | Yes |
-| `quantityUnits` | Unit UUID → symbol and conversion factor | Yes |
-| `synonyms` | Locale → word → alternatives | Yes |
-| `popularQueries` | Locale → list of suggested queries | No |
-| `featuredProductIds` | Locale → up to ten product UUIDs | No |
-| `popularityWeights` | Locale → product UUID → integer weight | Yes |
-| `queryHints` | Locale → product UUID → reviewed query strings | Yes |
-| `queryClickFeedback` | Versioned keyed query/product weights | No; secret must match |
+| Backend label | Configuration key | Format and effect | Rebuild required? |
+| --- | --- | --- | --- |
+| Suchoverlay aktivieren | `enabled` | Boolean; disabled by default | Build before first enabling |
+| Durchsuchbare Indexfelder | `indexFields` | Ordered list of searchable fields | Yes |
+| Abweichende Indexfelder je Sprache | `indexFieldsByLanguage` | Locale → field-list overrides | Yes |
+| Mengeneinheiten für die Suche | `quantityUnits` | Unit UUID → symbol and conversion factor | Yes |
+| Synonyme je Sprache | `synonyms` | Locale → word → alternatives | Yes |
+| Suchvorschläge je Sprache | `popularQueries` | Locale → list of suggested queries | No |
+| Startprodukte je Sprache | `featuredProductIds` | Locale → up to ten product UUIDs | No |
+
+Upgrading from a version with `queryHints`: that setting is no longer used or
+imported. Review and transfer any needed terms to the appropriate Shopware
+product search keywords before rebuilding. The old stored configuration is not
+automatically deleted; a successful rebuild removes those hints from the index.
+The former `queryClickFeedback` setting is also ignored; existing values are not
+automatically deleted. Click-based reranking stops immediately after upgrading. The former
+`popularityWeights` setting is ignored and no longer imported. A rebuild removes
+the old popularity ranking from the index; stored configuration is retained.
 
 The backend button **Suchindex jetzt neu aufbauen** requests a background build
 for all enabled channels and their storefront languages. Save settings before
 clicking. It does not run an expensive build inside the browser request.
+
+### Selecting fields, units, synonyms, suggestions and featured products
+
+Select a sales channel first. A channel can inherit a global setting or override
+it; for example, the overlay can be off globally and on for one channel. Editing
+an inherited field requires switching it to a channel-specific value through
+Shopware's inheritance control. Save settings before requesting a rebuild.
+
+- **Durchsuchbare Indexfelder:** Select standard fields or existing custom fields and click **Hinzufügen**,
+  then use the arrows to order them. Higher entries have higher attribute-ranking
+  priority. Empty saved configuration means the standard selection; it is not
+  written merely by opening the screen. The reset button restores that default.
+  Custom fields must be assigned to products; only scalar, language-local content
+  is indexed. The selection is limited to 64 distinct supported fields.
+- **Abweichende Indexfelder je Sprache:** Pick a locale and create an override
+  only when necessary. Unlisted locales use the general fields. A new override
+  starts with the standard fields and can be reordered or removed. Existing other
+  locales remain unchanged. Languages are selected from those configured in Shopware.
+- **Mengeneinheiten für die Suche:** Select an existing Shopware unit, a search
+  symbol and a factor, then add it. The factor is the number of search symbols
+  in one stored Shopware unit: litre → `l` and millilitre → `ml` use factor `1`.
+  An unambiguous unit short code is suggested; confirm it before adding. Remove
+  and re-add a mapping to change it. Keep `quantity` among the searchable fields.
+  Empty configuration disables structured quantity derivation, not ordinary search.
+- **Synonyme je Sprache:** Choose a configured language, enter a search term and
+  comma-separated alternatives, and add them. Save and rebuild the index.
+- **Suchvorschläge je Sprache:** Select a language and enter one suggestion per
+  line. A maximum of ten non-empty suggestions per language can be saved; each
+  may have at most 150 characters. An empty list hides suggestions for that
+  language. Suggestions take effect without rebuilding the index.
+
+- **Startprodukte je Sprache:** Choose a language and add up to ten products
+  using Shopware’s product selector. Remove products individually; other
+  languages remain unchanged. Only products currently visible in the sales
+  channel can appear. Save changes; a rebuild is not required.
+
+The controls preserve the existing JSON storage format. Opening a control does
+not rewrite values. If an existing value cannot be interpreted safely, the UI
+shows it for correction instead of silently replacing it. Before the extension
+configuration form saves, it validates all loaded sales-channel scopes, including
+language codes against configured Shopware languages. This is an administration
+form check; other configuration-writing paths must validate their own inputs. Index fields, locale
+overrides and unit mappings require a successful rebuild after saving. More
+synonyms are edited through the language-specific administration control.
 
 ## Searchable fields and language handling
 

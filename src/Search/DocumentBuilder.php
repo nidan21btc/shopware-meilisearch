@@ -6,7 +6,7 @@ use Shopware\Core\Content\Product\SalesChannel\SalesChannelProductEntity;
 
 final class DocumentBuilder
 {
-    public function build(SalesChannelProductEntity $product, string $languageId, array $fields = IndexFields::DEFAULTS, int $popularity = 0, array $queryHints = [], array $quantityUnits = []): ?array
+    public function build(SalesChannelProductEntity $product, string $languageId, array $fields = IndexFields::DEFAULTS, array $quantityUnits = []): ?array
     {
         $name = LanguageText::field($product, $languageId, 'name');
         // Classify the same visible name text that will actually be indexed.
@@ -61,10 +61,6 @@ final class DocumentBuilder
             // Prices and availability are resolved by Shopware at search time.
         ];
         $document = array_intersect_key($values, array_flip(['id', 'groupId', 'manufacturer', 'categories']));
-        $document['popularity'] = $popularity;
-        if ($queryHints !== []) {
-            $document['queryHints'] = $queryHints;
-        }
         foreach ($fields as $field) {
             if (str_starts_with($field, 'customFields.')) {
                 $key = substr($field, strlen('customFields.'));
@@ -83,11 +79,10 @@ final class DocumentBuilder
         }
 
         if ($unnamed) {
-            // Only a language-local, product-specific text (or explicitly
-            // imported language-local hints) can qualify a nameless product.
+            // Only a language-local, product-specific text can qualify a nameless product.
             // A category, manufacturer or identifier alone must not make it
             // appear in unrelated natural-language searches.
-            $ownText = $queryHints !== [];
+            $ownText = false;
             foreach ($fields as $field) {
                 if (str_starts_with($field, 'customFields.')) {
                     $value = $document['customFields'][substr($field, strlen('customFields.'))] ?? '';
@@ -105,22 +100,15 @@ final class DocumentBuilder
         return $document;
     }
 
-    public static function settings(array $synonyms, array $fields = IndexFields::DEFAULTS, string $locale = '', bool $useQueryHints = false): array
+    public static function settings(array $synonyms, array $fields = IndexFields::DEFAULTS, string $locale = ''): array
     {
-        $rules = ['words', 'typo', 'proximity', 'attribute', 'exactness', 'popularity:desc', 'sort'];
+        $rules = ['words', 'typo', 'proximity', 'attribute', 'exactness', 'sort'];
         $shortTypos = in_array($locale, ['de-DE', 'es-ES', 'fr-FR', 'it-IT'], true);
         $oneTypoAtFour = $shortTypos || $locale === 'en-GB';
         $searchable = $fields;
         $namePosition = array_search('name', $searchable, true);
         if ($namePosition !== false) array_splice($searchable, $namePosition + 1, 0, ['nameHyphenAliases']);
-        if ($useQueryHints) {
-            // Repeated product clicks are a useful signal, but the configured
-            // title, identifiers and other fields keep their own priority.
-            $namePosition = array_search('name', $searchable, true);
-            $descriptionPosition = array_search('description', $searchable, true);
-            $position = $namePosition !== false ? $namePosition + 1 : ($descriptionPosition === false ? count($searchable) : $descriptionPosition);
-            array_splice($searchable, $position, 0, ['queryHints']);
-        }
+
 
         return [
             'searchableAttributes' => $searchable,

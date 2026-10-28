@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Add sales-channel-aware administration controls for ordered search fields,
+  per-language overrides, existing Shopware units and multilingual suggestions;
+  preserve the underlying JSON configuration and invalid existing values.
+
+- Improve the administration index status layout with Shopware components and responsive actions.
+
 ## 0.2.0
 
 - Add a private vulnerability reporting policy and automated, synthetic PHP,
