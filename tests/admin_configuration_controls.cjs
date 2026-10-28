@@ -19,17 +19,17 @@ const unitB = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
   await page.addScriptTag({path:vue});
   await page.evaluate(({unitA,unitB}) => {
    window.fixture={components:{},unitA,unitB};
-   window.Shopware={Context:{api:{}},Component:{register(name,config){window.fixture.components[name]=config;}},Mixin:{getByName(){return {}}}};
+   window.Shopware={Context:{api:{}},Data:{Criteria:class { constructor(page,limit){this.page=page;this.limit=limit} addAssociation(){return this} }},Component:{register(name,config){window.fixture.components[name]=config;},override(name,config){window.fixture.overrides=window.fixture.overrides||{};window.fixture.overrides[name]=config;}},Mixin:{getByName(){return {}}}};
   },{unitA,unitB});
   await page.addScriptTag({content:script});
   await page.evaluate(() => {
-   const root={data(){return {global:'', language:JSON.stringify({'en-GB':['name','customFields.legacy_field']}), units:JSON.stringify({[window.fixture.unitA]:{symbol:'ml',factor:1}}), suggestions:JSON.stringify({'en-GB':['flower']}), featured:JSON.stringify({'en-GB':[window.fixture.unitA]}),disabled:false};},
-    template:`<div><section id="global"><sw-meilisearch-index-fields v-model:value="global" :disabled="disabled" /></section><section id="language"><sw-meilisearch-language-fields v-model:value="language" :disabled="disabled" /></section><section id="units"><sw-meilisearch-quantity-units v-model:value="units" :disabled="disabled" /></section><section id="suggestions"><sw-meilisearch-query-suggestions v-model:value="suggestions" :disabled="disabled" /></section><section id="featured"><sw-meilisearch-featured-products v-model:value="featured" :disabled="disabled" /></section></div>`};
+   const root={data(){return {global:'', language:JSON.stringify({'en-GB':['name','customFields.legacy_field']}), units:JSON.stringify({[window.fixture.unitA]:{symbol:'ml',factor:1}}), suggestions:JSON.stringify({'en-GB':['flower']}), featured:JSON.stringify({'en-GB':[window.fixture.unitA]}), synonyms:'',disabled:false};},
+    template:`<div><section id="global"><sw-meilisearch-index-fields v-model:value="global" :disabled="disabled" /></section><section id="language"><sw-meilisearch-language-fields v-model:value="language" :disabled="disabled" /></section><section id="units"><sw-meilisearch-quantity-units v-model:value="units" :disabled="disabled" /></section><section id="synonyms"><sw-meilisearch-synonyms v-model:value="synonyms" :disabled="disabled" /></section><section id="suggestions"><sw-meilisearch-query-suggestions v-model:value="suggestions" :disabled="disabled" /></section><section id="featured"><sw-meilisearch-featured-products v-model:value="featured" :disabled="disabled" /></section></div>`};
    const app=Vue.createApp(root);
    for (const [name,component] of Object.entries(window.fixture.components)) app.component(name,component);
    app.component('sw-button',{props:['disabled'],emits:['click'],template:'<button :disabled="disabled" @click="$emit(\'click\')"><slot/></button>'});
    app.component('sw-entity-single-select',{props:['value','disabled','label','entity'],emits:['update:value'],template:`<label class="entity">{{ label }}<select :value="value || ''" :disabled="disabled" @change="$emit('update:value',$event.target.value || null)"><option value="">Auswählen</option><template v-if="entity === 'unit'"><option :value="unitA">Milliliter</option><option :value="unitB">Liter</option></template><template v-else-if="entity === 'product'"><option :value="unitA">Produkt A</option><option :value="unitB">Produkt B</option></template><option v-else value="custom-id">Farbhinweis</option></select></label>`,computed:{unitA(){return window.fixture.unitA},unitB(){return window.fixture.unitB}}});
-   app.provide('repositoryFactory',{create(entity){return {get:async id=>entity==='unit'?{translated:{shortCode:id===window.fixture.unitB?'l':'ml'}}:{name:'fixture_field'}}}});
+   app.provide('repositoryFactory',{create(entity){return {search:async () => [{translationCode:{code:'de-DE'}},{translationCode:{code:'en-GB'}},{translationCode:{code:'nl-NL'}}],get:async id=>entity==='unit'?{translated:{shortCode:id===window.fixture.unitB?'l':'ml'}}:{name:'fixture_field'}}}});
    window.fixture.vm=app.mount('#app');
   });
   await page.locator('#global li').first().waitFor();
@@ -65,8 +65,7 @@ const unitB = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
   await page.locator('#language select').nth(1).selectOption('ean');
   await page.locator('#language').getByRole('button',{name:'Hinzufügen',exact:true}).click();
   let language=JSON.parse(await page.evaluate(()=>window.fixture.vm.language));assert.deepEqual(language['en-GB'],['name','customFields.legacy_field','ean']);
-  await page.locator('#language').getByLabel('Weitere Sprachkennung').fill('nl-NL');
-  await page.locator('#language').getByRole('button',{name:'Sprache auswählen',exact:true}).click();
+  await page.locator('#language').getByLabel('Sprache auswählen').selectOption('nl-NL');
   await page.locator('#language').getByRole('button',{name:'Ausnahme mit Standardfeldern anlegen'}).click();
   language=JSON.parse(await page.evaluate(()=>window.fixture.vm.language));assert(language['nl-NL'].includes('quantity'));assert.deepEqual(language['en-GB'],['name','customFields.legacy_field','ean']);
   await page.locator('#units .sw-meilisearch-config__unit-add .entity select').selectOption(unitB);
@@ -88,6 +87,21 @@ const unitB = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
   await page.evaluate(()=>{window.fixture.vm.featured='{invalid'});
   assert(await page.locator('#featured [role=alert]').isVisible());
   assert.equal(await page.locator('#featured textarea').inputValue(),'{invalid');
+  await page.locator('#synonyms').getByLabel('Suchbegriff', {exact:true}).fill('Blume');
+  await page.locator('#synonyms').getByLabel('Synonyme (durch Komma getrennt)').fill('Blüte, Pflanze');
+  await page.locator('#synonyms').getByRole('button',{name:'Hinzufügen'}).click();
+  assert.deepEqual(JSON.parse(await page.evaluate(()=>window.fixture.vm.synonyms)),{'de-DE':{'Blume':['Blüte','Pflanze']}});
+  assert.equal(await page.locator('#language').getByLabel('Sprache auswählen').locator('option').count(),3);
+  await page.locator('#suggestions textarea').fill(Array.from({length:11},(_,i)=>`Begriff ${i}`).join('\n'));
+  assert(await page.locator('#suggestions [role=alert]').isVisible());
+  const saveCheck=await page.evaluate(async()=>{let saved=false; const override=window.fixture.overrides['sw-system-config'];const ctx={domain:'ShopwareMeilisearch.config',actualConfigData:{null:{'ShopwareMeilisearch.config.popularQueries':window.fixture.vm.suggestions}},repositoryFactory:{create(){return {search:async()=>[{translationCode:{code:'de-DE'}},{translationCode:{code:'en-GB'}}]}}},$super(){saved=true}};try{await override.methods.saveAll.call(ctx);return 'accepted'}catch(e){return saved?'saved':e.message}});
+  assert(saveCheck.includes('popularQueries'),'Invalid suggestions must block the entire save');
+  const checks=await page.evaluate(async()=>{const override=window.fixture.overrides['sw-system-config'];const run=async(domain,key,value)=>{let saved=false;const ctx={domain,actualConfigData:{null:{['ShopwareMeilisearch.config.'+key]:value}},repositoryFactory:{create(){return {search:async()=>[{translationCode:{code:'de-DE'}},{translationCode:{code:'en-GB'}}]}}},$super(){saved=true}};try{await override.methods.saveAll.call(ctx);return saved?'saved':'no save'}catch(e){return e.message}};return [await run('ShopwareMeilisearch.config','synonyms','{invalid'),await run('ShopwareMeilisearch.config','synonyms',JSON.stringify({'zz-ZZ':{a:['b']}})),await run('ShopwareMeilisearch.config','synonyms',JSON.stringify({'de-DE':{a:['b']}})),await run('other.config','synonyms','{invalid')];});
+  assert(checks[0].includes('synonyms'),'Malformed synonyms must block save');
+  assert(checks[1].includes('zz-ZZ'),'Unknown language must block save');
+  assert.equal(checks[2],'saved','Valid settings can be saved');
+  assert.equal(checks[3],'saved','Unrelated extension settings must not be affected');
+
   await page.locator('#suggestions textarea').fill('Rose\nBlume');
   const suggestions=JSON.parse(await page.evaluate(()=>window.fixture.vm.suggestions));assert.deepEqual(suggestions,{'en-GB':['flower'],'de-DE':['Rose','Blume']});
   const raw=await page.evaluate(()=>({fields:window.fixture.vm.global,languages:window.fixture.vm.language,units:window.fixture.vm.units}));

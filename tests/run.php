@@ -23,7 +23,6 @@ use ShopwareMeilisearch\Search\IndexFields;
 use ShopwareMeilisearch\Search\SearchInput;
 use ShopwareMeilisearch\Search\Discovery;
 use ShopwareMeilisearch\Search\SearchService;
-use ShopwareMeilisearch\Search\FeedbackConfig;
 use ShopwareMeilisearch\Search\TypoRelevance;
 use ShopwareMeilisearch\Search\PartialMatches;
 use ShopwareMeilisearch\Search\OrthographicFallback;
@@ -224,11 +223,7 @@ check(NameAliases::hyphenCompounds('Alpha-Beta-Gamma-Delta') === ['AlphaBeta', '
 check(NameAliases::hyphenCompounds('Alpha-Beta‐Gamma') === ['AlphaBeta', 'AlphaBetaGamma'], 'Join mixed Unicode hyphen compounds');
 check(NameAliases::hyphenCompounds('ABC-123 A-B AB-CD') === [], 'Do not generate aliases for identifiers or very short pieces');
 check(!in_array('nameHyphenAliases', DocumentBuilder::settings([], ['description'])['searchableAttributes'], true), 'Do not add name-derived aliases when name is excluded');
-check(array_search('popularity:desc', DocumentBuilder::settings([], $fields, 'de-DE')['rankingRules'], true) > array_search('attribute', DocumentBuilder::settings([], $fields, 'de-DE')['rankingRules'], true), 'German popularity is a late tie-breaker');
-check(array_search('popularity:desc', DocumentBuilder::settings([], $fields, 'en-GB')['rankingRules'], true) > array_search('exactness', DocumentBuilder::settings([], $fields, 'en-GB')['rankingRules'], true), 'English popularity breaks ties after textual relevance');
-foreach (['es-ES', 'fr-FR', 'it-IT'] as $locale) {
-    check(array_search('popularity:desc', DocumentBuilder::settings([], $fields, $locale)['rankingRules'], true) > array_search('exactness', DocumentBuilder::settings([], $fields, $locale)['rankingRules'], true), 'Popularity breaks ties after textual relevance in each language');
-}
+check(!in_array('popularity:desc', DocumentBuilder::settings([], $fields, 'de-DE')['rankingRules'], true), 'Search does not use historical popularity');
 check(DocumentBuilder::settings([], $fields, 'de-DE')['typoTolerance']['minWordSizeForTypos']['oneTypo'] === 4, 'German short-word typo tolerance');
 check(DocumentBuilder::settings([], $fields, 'en-GB')['typoTolerance']['minWordSizeForTypos']['oneTypo'] === 4, 'English supports guarded short-word typo tolerance');
 check((new DocumentBuilder())->build($product, $channel, $fields)['customFields']['search_themes'] === '', 'Custom fields cannot fallback across languages');
@@ -327,13 +322,13 @@ check(QuantityUnits::tokens($litreId, 0.01, QuantityUnits::parse('{}')) === [], 
 check(in_array('quantity', IndexFields::DEFAULTS, true), 'Default field selection includes physical quantity');
 $product->setUnitId($litreId);
 $product->setPurchaseUnit(0.01);
-$germanQuantity = (new DocumentBuilder())->build($product, $language, ['name', 'quantity'], 0, $quantityUnits);
-$englishQuantity = (new DocumentBuilder())->build($product, $channel, ['name', 'quantity'], 0, $quantityUnits);
+$germanQuantity = (new DocumentBuilder())->build($product, $language, ['name', 'quantity'], $quantityUnits);
+$englishQuantity = (new DocumentBuilder())->build($product, $channel, ['name', 'quantity'], $quantityUnits);
 check($germanQuantity['quantity'] === ['10 ml', '10ml', '0.01 l', '0.01l'] && $englishQuantity['quantity'] === ['10 ml', '10ml', '0.01 l', '0.01l'] && $germanQuantity['quantityKey'] === 'ml:10' && $englishQuantity['quantityKey'] === 'ml:10', 'Physical quantity is language neutral without translated text');
-check(!isset((new DocumentBuilder())->build($product, $language, ['name'], 0, $quantityUnits)['quantityKey']), 'Unselected quantity key is not indexed');
-check(!isset((new DocumentBuilder())->build($product, $language, ['name'], 0, $quantityUnits)['quantity']), 'Unselected quantity is not indexed');
+check(!isset((new DocumentBuilder())->build($product, $language, ['name'], $quantityUnits)['quantityKey']), 'Unselected quantity key is not indexed');
+check(!isset((new DocumentBuilder())->build($product, $language, ['name'], $quantityUnits)['quantity']), 'Unselected quantity is not indexed');
 $product->setPurchaseUnit(0.001000000004);
-$roundedQuantity = (new DocumentBuilder())->build($product, $language, ['name', 'quantity'], 0, $quantityUnits);
+$roundedQuantity = (new DocumentBuilder())->build($product, $language, ['name', 'quantity'], $quantityUnits);
 check($roundedQuantity['quantity'] === [] && !isset($roundedQuantity['quantityKey']), 'A materially rounded size cannot enter a product document or affect relevance');
 $product->setUnitId(null);
 $product->setPurchaseUnit(null);
@@ -397,15 +392,6 @@ check(SearchService::matchedParents(['child' => 'parent'], ['parent' => true, 'c
 check(SearchService::matchedParents(['child' => 'parent'], ['parent' => true], ['child' => true]) === [], 'A partial variant must not hide a primary parent after filtering');
 $priceInput = new SearchInput('', 1, 'relevance', [], [], 10.0, 15.0, false);
 check(SearchService::filterByDisplayedPrice(['one', 'two', 'three', 'missing'], ['one' => 10.0, 'two' => 15.0, 'three' => 15.01], $priceInput) === ['one', 'two'], 'Filter by the actual displayed price and include the bounds');
-check(FeedbackConfig::parse('{"de-DE":{"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa":5}}', 'popularity')['de-DE'][$channel] === 5, 'Parse per-language popularity');
-foreach ([['{"de-DE":{"bad":2}}','popularity'], ['{"de-DE":{"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa":-1}}','popularity'], ['["invalid"]','popularity']] as [$badJson, $kind]) {
-    try {
-        FeedbackConfig::parse($badJson, $kind);
-        throw new RuntimeException('Invalid feedback accepted');
-    } catch (InvalidArgumentException) {
-        ++$checks;
-    }
-}
 foreach ([['sort' => 'random'], ['minPrice' => '-1'], ['minPrice' => '1e3'], ['minPrice' => '1.00001'], ['minPrice' => '20', 'maxPrice' => '10'], ['manufacturer' => ['bad-id']], ['q' => str_repeat('a', 151)]] as $invalid) {
     try {
         SearchInput::fromRequest(new Request($invalid));

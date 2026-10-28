@@ -129,6 +129,7 @@
 
 .sw-meilisearch-config__add-row > label,
 .sw-meilisearch-config__unit-add > label,
+.sw-meilisearch-config__locale-label,
 .sw-meilisearch-config > label {
     display: flex;
     flex-direction: column;

@@ -184,3 +184,12 @@ without keeping data removes `shopware_meilisearch_state`; the plugin does not
 remove an independently managed engine, its data files, API keys, service-manager
 entries or provider jobs. Inventory these separately, confirm they belong only
 to the removed installation, then revoke/delete them deliberately.
+
+Shopware removes extension configuration when uninstalling without retaining
+data. Keeping data retains the plugin's state table and configuration. Stop or
+drain background workers before uninstalling, then restart them after Shopware
+has rebuilt its container; Shopware's scheduled-task registration removes tasks
+whose plugin is no longer active. The plugin does not delete external indexes
+automatically because the Meilisearch service may be shared. Check its index names
+and ownership before manually removing any external data. This lifecycle has not
+yet been verified end-to-end in a disposable installation for this revision.

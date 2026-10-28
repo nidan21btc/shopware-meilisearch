@@ -52,20 +52,21 @@ workers, database and host memory before using it. See [security](security.md).
 | Synonyme je Sprache | `synonyms` | Locale → word → alternatives | Yes |
 | Suchvorschläge je Sprache | `popularQueries` | Locale → list of suggested queries | No |
 | Startprodukte je Sprache | `featuredProductIds` | Locale → up to ten product UUIDs | No |
-| Produktbeliebtheit je Sprache | `popularityWeights` | Locale → product UUID → integer weight | Yes |
 
 Upgrading from a version with `queryHints`: that setting is no longer used or
 imported. Review and transfer any needed terms to the appropriate Shopware
 product search keywords before rebuilding. The old stored configuration is not
 automatically deleted; a successful rebuild removes those hints from the index.
 The former `queryClickFeedback` setting is also ignored; existing values are not
-automatically deleted. Click-based reranking stops immediately after upgrading.
+automatically deleted. Click-based reranking stops immediately after upgrading. The former
+`popularityWeights` setting is ignored and no longer imported. A rebuild removes
+the old popularity ranking from the index; stored configuration is retained.
 
 The backend button **Suchindex jetzt neu aufbauen** requests a background build
 for all enabled channels and their storefront languages. Save settings before
 clicking. It does not run an expensive build inside the browser request.
 
-### Selecting fields, units, suggestions and featured products in the administration
+### Selecting fields, units, synonyms, suggestions and featured products
 
 Select a sales channel first. A channel can inherit a global setting or override
 it; for example, the overlay can be off globally and on for one channel. Editing
@@ -81,17 +82,19 @@ Shopware's inheritance control. Save settings before requesting a rebuild.
 - **Abweichende Indexfelder je Sprache:** Pick a locale and create an override
   only when necessary. Unlisted locales use the general fields. A new override
   starts with the standard fields and can be reordered or removed. Existing other
-  locales remain unchanged. Additional locale codes may be entered explicitly.
+  locales remain unchanged. Languages are selected from those configured in Shopware.
 - **Mengeneinheiten für die Suche:** Select an existing Shopware unit, a search
   symbol and a factor, then add it. The factor is the number of search symbols
   in one stored Shopware unit: litre → `l` and millilitre → `ml` use factor `1`.
   An unambiguous unit short code is suggested; confirm it before adding. Remove
   and re-add a mapping to change it. Keep `quantity` among the searchable fields.
   Empty configuration disables structured quantity derivation, not ordinary search.
-- **Suchvorschläge je Sprache:** Select a locale and enter one suggestion per
-  line. At most ten valid suggestions are shown. An empty list hides suggestions
-  for that language; other languages are preserved. Suggestions take effect
-  without rebuilding the index.
+- **Synonyme je Sprache:** Choose a configured language, enter a search term and
+  comma-separated alternatives, and add them. Save and rebuild the index.
+- **Suchvorschläge je Sprache:** Select a language and enter one suggestion per
+  line. A maximum of ten non-empty suggestions per language can be saved; each
+  may have at most 150 characters. An empty list hides suggestions for that
+  language. Suggestions take effect without rebuilding the index.
 
 - **Startprodukte je Sprache:** Choose a language and add up to ten products
   using Shopware’s product selector. Remove products individually; other
@@ -100,9 +103,12 @@ Shopware's inheritance control. Save settings before requesting a rebuild.
 
 The controls preserve the existing JSON storage format. Opening a control does
 not rewrite values. If an existing value cannot be interpreted safely, the UI
-shows it for correction instead of silently replacing it. Index fields, locale
+shows it for correction instead of silently replacing it. Before the extension
+configuration form saves, it validates all loaded sales-channel scopes, including
+language codes against configured Shopware languages. This is an administration
+form check; other configuration-writing paths must validate their own inputs. Index fields, locale
 overrides and unit mappings require a successful rebuild after saving. More
-advanced synonym and popularity inputs retain their JSON or reviewed-import workflows.
+synonyms are edited through the language-specific administration control.
 
 ## Searchable fields and language handling
 

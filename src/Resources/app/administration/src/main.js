@@ -70,7 +70,6 @@ const indexFieldLabels = {
     purchaseUnit: 'Verkaufseinheit', referenceUnit: 'Referenzeinheit', releaseDate: 'Erscheinungsdatum',
 };
 const defaultIndexFields = ['productNumber', 'ean', 'manufacturerNumber', 'name', 'quantity', 'keywords', 'customSearchKeywords', 'manufacturer', 'properties', 'categories', 'description'];
-const knownLocales = ['de-DE', 'en-GB', 'es-ES', 'fr-FR', 'it-IT'];
 function parseSetting(value, fallback, kind) {
     if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) return {data: fallback, valid: true};
     try {
@@ -80,10 +79,85 @@ function parseSetting(value, fallback, kind) {
         return {data: valid ? parsed : fallback, valid};
     } catch (_) { return {data: fallback, valid: false}; }
 }
-function localeKeys(object) { return [...new Set([...knownLocales, ...Object.keys(object)])]; }
 function validIndexFields(fields) {
     return Array.isArray(fields) && fields.length >= 1 && fields.length <= 64 && new Set(fields).size === fields.length && fields.every(field => typeof field === 'string' && (Object.hasOwn(indexFieldLabels, field) || /^customFields\.[a-zA-Z0-9_]{1,128}$/.test(field)));
 }
+
+// Use the same translation code (falling back to locale) as the storefront context.
+async function configuredSearchLocales(repositoryFactory) {
+    const repository = repositoryFactory.create('language');
+    const codes = new Set();
+    for (let page = 1; ; page++) {
+        const criteria = new Shopware.Data.Criteria(page, 100);
+        criteria.addAssociation('translationCode'); criteria.addAssociation('locale');
+        const languages = await repository.search(criteria, Shopware.Context.api);
+        for (const language of languages) {
+            const code = language.translationCode?.code || language.locale?.code;
+            if (code) codes.add(code);
+        }
+        if (languages.length < 100) break;
+    }
+    return [...codes].sort();
+}
+
+Shopware.Component.register('sw-meilisearch-locale-select', {
+    inject: ['repositoryFactory'],
+    props: {value: {type: String, default: ''}},
+    emits: ['update:value'],
+    data() { return {locales: [], error: '', loaded: false}; },
+    async created() {
+        try {
+            this.locales = await configuredSearchLocales(this.repositoryFactory);
+            if (!this.locales.includes(this.value)) this.$emit('update:value', this.locales.includes('de-DE') ? 'de-DE' : (this.locales[0] || ''));
+            if (!this.locales.length) this.error = 'Keine Shopware-Sprachen gefunden.';
+        } catch (_) { this.error = 'Die Shopware-Sprachen konnten nicht geladen werden.'; }
+        this.loaded = true;
+    },
+    template: `<div><label class="sw-meilisearch-config__locale-label">Sprache auswählen <select :value="value" :disabled="!loaded || !locales.length" class="sw-meilisearch-config__input" @change="$emit('update:value', $event.target.value)"><option v-for="code in locales" :key="code" :value="code">{{ code }}</option></select></label><p v-if="error" role="alert" class="sw-meilisearch-config__error">{{ error }}</p></div>`,
+});
+
+// Validate the complete batch before Shopware saves any sales-channel scope.
+function validateSearchConfig(values, locales) {
+    const object = value => { const parsed = parseSetting(value, {}, 'object'); if (!parsed.valid) throw new Error('Ungültiges JSON-Objekt.'); return parsed.data; };
+    const localized = (value, validEntry) => {
+        for (const [locale, entry] of Object.entries(object(value))) {
+            if (!locales.includes(locale)) throw new Error('Die Sprachkennung ' + locale + ' ist in Shopware nicht eingerichtet.');
+            if (!validEntry(entry)) throw new Error('Ungültige Werte für Sprache ' + locale + '.');
+        }
+    };
+    const prefix = 'ShopwareMeilisearch.config.';
+    for (const scope of Object.values(values)) {
+        for (const [fullName, value] of Object.entries(scope || {})) {
+            if (!fullName.startsWith(prefix) || value === null || value === undefined || value === '') continue;
+            const key = fullName.slice(prefix.length);
+            try {
+                if (key === 'indexFields') { const x = parseSetting(value, [], 'list'); if (!x.valid || !validIndexFields(x.data)) throw new Error('Ungültige Feldauswahl.'); }
+                if (key === 'indexFieldsByLanguage') localized(value, validIndexFields);
+                if (key === 'quantityUnits') {
+                    const entries = Object.entries(object(value));
+                    if (entries.length > 32 || entries.some(([id, unit]) => !/^[a-f0-9]{32}$/.test(id) || !unit || typeof unit !== 'object' || Array.isArray(unit) || Object.keys(unit).length !== 2 || !['ml','l','g','kg'].includes(unit.symbol) || typeof unit.factor !== 'number' || !Number.isFinite(unit.factor) || unit.factor <= 0 || unit.factor > 1000000)) throw new Error('Ungültige Einheitenzuordnung.');
+                }
+                if (key === 'popularQueries') localized(value, terms => Array.isArray(terms) && terms.filter(term => typeof term === 'string' && term.trim()).length <= 10 && terms.every(term => typeof term === 'string' && [...term.trim()].length <= 150));
+                if (key === 'featuredProductIds') localized(value, ids => Array.isArray(ids) && ids.length <= 10 && new Set(ids).size === ids.length && ids.every(id => typeof id === 'string' && /^[a-f0-9]{32}$/.test(id)));
+                if (key === 'synonyms') localized(value, group => !!group && typeof group === 'object' && !Array.isArray(group) && Object.entries(group).every(([word, terms]) => !!word.trim() && Array.isArray(terms) && terms.length > 0 && terms.every(term => typeof term === 'string' && !!term.trim())));
+            } catch (error) { throw new Error('Einstellung ' + key + ': ' + error.message); }
+        }
+    }
+}
+
+Shopware.Component.override('sw-system-config', {
+    inject: ['repositoryFactory'],
+    methods: {
+        async saveAll() {
+            if (this.domain === 'ShopwareMeilisearch.config') {
+                const locales = await configuredSearchLocales(this.repositoryFactory);
+                if (!locales.length) throw new Error('Die Shopware-Sprachen konnten nicht ermittelt werden.');
+                validateSearchConfig(this.actualConfigData, locales);
+            }
+            return this.$super('saveAll');
+        },
+    },
+});
 
 Shopware.Component.register('sw-meilisearch-field-list', {
     inject: ['repositoryFactory'],
@@ -172,26 +246,22 @@ Shopware.Component.register('sw-meilisearch-language-fields', {
             if (x.valid && Object.entries(x.data).some(([locale, fields]) => !/^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})+$/.test(locale) || !validIndexFields(fields))) x.valid = false;
             return x;
         },
-        locales() { return [...new Set([...localeKeys(this.parsed.data), this.locale])]; },
         fields() { return this.parsed.data[this.locale] || null; },
-        localeValid() { return /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})+$/.test(this.newLocale); },
     },
     template: `
       <div class="sw-meilisearch-config">
         <template v-if="parsed.valid">
           <p class="sw-meilisearch-config__help">Ohne Ausnahme verwendet eine Sprache die allgemeine Feldauswahl.</p>
-          <label>Sprache auswählen <select v-model="locale" class="sw-meilisearch-config__input"><option v-for="item in locales" :key="item" :value="item">{{ item }}</option></select></label>
+          <sw-meilisearch-locale-select v-model:value="locale" />
           <template v-if="fields"><sw-meilisearch-field-list :value="fields" :disabled="disabled" @update:value="saveFields" /><sw-button :disabled="disabled" @click="removeOverride">Ausnahme entfernen</sw-button></template>
-          <template v-else><p class="sw-meilisearch-config__help">Für {{ locale }} ist keine Ausnahme hinterlegt.</p><sw-button :disabled="disabled" @click="saveFields([...defaults])">Ausnahme mit Standardfeldern anlegen</sw-button></template>
-          <div class="sw-meilisearch-config__add-row"><label>Weitere Sprachkennung <input v-model.trim="newLocale" :disabled="disabled" class="sw-meilisearch-config__input" placeholder="z. B. nl-NL"></label><sw-button :disabled="disabled || !localeValid" @click="addLocale">Sprache auswählen</sw-button></div>
+          <template v-else><p class="sw-meilisearch-config__help">Für {{ locale }} ist keine Ausnahme hinterlegt.</p><sw-button :disabled="disabled || !locale" @click="saveFields([...defaults])">Ausnahme mit Standardfeldern anlegen</sw-button></template>
         </template>
         <template v-else><p role="alert" class="sw-meilisearch-config__error">Die bestehende Einstellung ist kein gültiges JSON. Bitte korrigieren; sie wird nicht automatisch überschrieben.</p><textarea class="sw-meilisearch-config__input" :value="value" :disabled="disabled" @input="$emit('update:value', $event.target.value)"></textarea></template>
       </div>`,
-    data() { return {locale: 'de-DE', newLocale: '', defaults: defaultIndexFields}; },
+    data() { return {locale: '', defaults: defaultIndexFields}; },
     methods: {
         saveFields(fields) { this.$emit('update:value', JSON.stringify({...this.parsed.data, [this.locale]: fields})); },
         removeOverride() { const next = {...this.parsed.data}; delete next[this.locale]; this.$emit('update:value', JSON.stringify(next)); },
-        addLocale() { if (!this.localeValid) return; this.locale = this.newLocale; this.newLocale = ''; },
     },
 });
 
@@ -248,52 +318,78 @@ Shopware.Component.register('sw-meilisearch-quantity-units', {
     },
 });
 
+Shopware.Component.register('sw-meilisearch-synonyms', {
+    props: {value: {type: String, default: ''}, disabled: {type: Boolean, default: false}},
+    emits: ['update:value'],
+    data() { return {locale: '', word: '', alternatives: ''}; },
+    computed: {
+        parsed() {
+            const x = parseSetting(this.value, {}, 'object');
+            if (x.valid && Object.values(x.data).some(group => !group || typeof group !== 'object' || Array.isArray(group) || Object.entries(group).some(([word, terms]) => !word.trim() || !Array.isArray(terms) || !terms.length || terms.some(term => typeof term !== 'string' || !term.trim())))) x.valid = false;
+            return x;
+        },
+        entries() { return Object.entries(this.parsed.data[this.locale] || {}); },
+        terms() { return this.alternatives.split(',').map(term => term.trim()).filter(Boolean); },
+        canAdd() { return !this.disabled && !!this.locale && !!this.word.trim() && this.terms.length > 0 && !Object.hasOwn(this.parsed.data[this.locale] || {}, this.word.trim()); },
+    },
+    template: `
+      <div class="sw-meilisearch-config">
+        <template v-if="parsed.valid">
+          <p class="sw-meilisearch-config__help">Synonyme wirken je Sprache. Nach dem Speichern den Suchindex neu aufbauen.</p>
+          <sw-meilisearch-locale-select v-model:value="locale" />
+          <div v-for="entry in entries" :key="entry[0]" class="sw-meilisearch-config__item"><span class="sw-meilisearch-config__item-name"><strong>{{ entry[0] }}</strong><span>{{ entry[1].join(', ') }}</span></span><sw-button :disabled="disabled" :aria-label="'Synonym ' + entry[0] + ' entfernen'" @click="remove(entry[0])">Entfernen</sw-button></div>
+          <div class="sw-meilisearch-config__add-row"><label>Suchbegriff <input v-model.trim="word" :disabled="disabled || !locale" class="sw-meilisearch-config__input"></label><label>Synonyme (durch Komma getrennt) <input v-model="alternatives" :disabled="disabled || !locale" class="sw-meilisearch-config__input"></label><sw-button :disabled="!canAdd" @click="add">Hinzufügen</sw-button></div>
+          <p v-if="word.trim() && Object.hasOwn(parsed.data[locale] || {}, word.trim())" class="sw-meilisearch-config__help">Für diesen Suchbegriff existiert bereits ein Eintrag. Entferne ihn vor einer Änderung.</p>
+        </template>
+        <template v-else><p role="alert" class="sw-meilisearch-config__error">Die bestehende Synonymeinstellung ist ungültig. Bitte korrigieren; sie wird nicht automatisch überschrieben.</p><textarea class="sw-meilisearch-config__input" :value="value" :disabled="disabled" @input="$emit('update:value', $event.target.value)"></textarea></template>
+      </div>`,
+    methods: {
+        add() { if (!this.canAdd) return; const group = {...(this.parsed.data[this.locale] || {}), [this.word.trim()]: [...new Set(this.terms)]}; this.$emit('update:value', JSON.stringify({...this.parsed.data, [this.locale]: group})); this.word = ''; this.alternatives = ''; },
+        remove(word) { if (this.disabled) return; const group = {...this.parsed.data[this.locale]}; delete group[word]; this.$emit('update:value', JSON.stringify({...this.parsed.data, [this.locale]: group})); },
+    },
+});
+
 Shopware.Component.register('sw-meilisearch-query-suggestions', {
     props: {value: {type: String, default: ''}, disabled: {type: Boolean, default: false}},
     emits: ['update:value'],
-    data() { return {locale: 'de-DE', newLocale: ''}; },
+    data() { return {locale: ''}; },
     computed: {
         parsed() { const x = parseSetting(this.value, {}, 'object'); if (x.valid && Object.values(x.data).some(v => !Array.isArray(v) || v.some(t => typeof t !== 'string'))) x.valid = false; return x; },
-        locales() { return [...new Set([...localeKeys(this.parsed.data), this.locale])]; },
         terms() { return (this.parsed.data[this.locale] || []).join('\n'); },
-        localeValid() { return /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})+$/.test(this.newLocale); },
+        suggestionError() { const terms = this.parsed.data[this.locale] || []; return terms.filter(term => term.trim()).length > 10 ? 'Höchstens zehn Suchvorschläge je Sprache sind erlaubt.' : (terms.some(term => [...term.trim()].length > 150) ? 'Ein Suchvorschlag darf höchstens 150 Zeichen lang sein.' : ''); },
     },
     template: `
       <div class="sw-meilisearch-config">
         <template v-if="parsed.valid">
           <p class="sw-meilisearch-config__help">Diese Vorschläge erscheinen beim Öffnen der Suche. Je Sprache werden höchstens zehn Einträge angezeigt.</p>
-          <label>Sprache auswählen <select v-model="locale" class="sw-meilisearch-config__input"><option v-for="item in locales" :key="item" :value="item">{{ item }}</option></select></label>
-          <label>Ein Suchvorschlag pro Zeile <textarea :value="terms" :disabled="disabled" rows="4" class="sw-meilisearch-config__input" @input="setTerms($event.target.value)"></textarea></label>
-          <div class="sw-meilisearch-config__add-row"><label>Weitere Sprachkennung <input v-model.trim="newLocale" :disabled="disabled" class="sw-meilisearch-config__input" placeholder="z. B. nl-NL"></label><sw-button :disabled="disabled || !localeValid" @click="addLocale">Sprache auswählen</sw-button></div>
+          <sw-meilisearch-locale-select v-model:value="locale" />
+          <label>Ein Suchvorschlag pro Zeile <textarea :value="terms" :disabled="disabled || !locale" rows="4" class="sw-meilisearch-config__input" @input="setTerms($event.target.value)"></textarea></label><p v-if="suggestionError" role="alert" class="sw-meilisearch-config__error">{{ suggestionError }}</p>
         </template>
         <template v-else><p role="alert" class="sw-meilisearch-config__error">Die bestehende Einstellung ist kein gültiges JSON. Bitte korrigieren; sie wird nicht automatisch überschrieben.</p><textarea class="sw-meilisearch-config__input" :value="value" :disabled="disabled" @input="$emit('update:value', $event.target.value)"></textarea></template>
       </div>`,
     methods: {
-        setTerms(text) { this.$emit('update:value', JSON.stringify({...this.parsed.data, [this.locale]: text === '' ? [] : text.split('\n')})); },
-        addLocale() { if (!this.localeValid) return; this.locale = this.newLocale; this.newLocale = ''; },
+        setTerms(text) { if (this.locale) this.$emit('update:value', JSON.stringify({...this.parsed.data, [this.locale]: text === '' ? [] : text.split('\n')})); },
     },
 });
 
 Shopware.Component.register('sw-meilisearch-featured-products', {
     props: {value: {type: String, default: ''}, disabled: {type: Boolean, default: false}},
     emits: ['update:value'],
-    data() { return {locale: 'de-DE', newLocale: '', productId: null}; },
+    data() { return {locale: '', productId: null}; },
     computed: {
         parsed() {
             const x = parseSetting(this.value, {}, 'object');
             if (x.valid && Object.values(x.data).some(ids => !Array.isArray(ids) || ids.length > 10 || new Set(ids).size !== ids.length || ids.some(id => typeof id !== 'string' || !/^[a-f0-9]{32}$/.test(id)))) x.valid = false;
             return x;
         },
-        locales() { return [...new Set([...localeKeys(this.parsed.data), this.locale])]; },
         products() { return this.parsed.data[this.locale] || []; },
-        localeValid() { return /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})+$/.test(this.newLocale); },
         canAdd() { return !this.disabled && this.productId && !this.products.includes(this.productId) && this.products.length < 10; },
     },
     template: `
       <div class="sw-meilisearch-config">
         <template v-if="parsed.valid">
           <p class="sw-meilisearch-config__help">Diese Produkte erscheinen beim Öffnen der Suche, soweit sie im Verkaufskanal sichtbar sind. Je Sprache können bis zu zehn Produkte ausgewählt werden. Änderungen speichern.</p>
-          <label>Sprache auswählen <select v-model="locale" class="sw-meilisearch-config__input" @change="productId = null"><option v-for="item in locales" :key="item" :value="item">{{ item }}</option></select></label>
+          <sw-meilisearch-locale-select :value="locale" @update:value="locale = $event; productId = null" />
           <div v-for="id in products" :key="id" class="sw-meilisearch-config__item sw-meilisearch-config__unit sw-meilisearch-config__featured-item">
             <sw-entity-single-select entity="product" :value="id" :disabled="true" label="Startprodukt" />
             <sw-button :disabled="disabled" aria-label="Startprodukt entfernen" @click="remove(id)">Entfernen</sw-button>
@@ -304,13 +400,11 @@ Shopware.Component.register('sw-meilisearch-featured-products', {
           </div>
           <p v-if="products.length >= 10" class="sw-meilisearch-config__help">Für diese Sprache sind bereits zehn Produkte ausgewählt.</p>
           <p v-else-if="productId && products.includes(productId)" class="sw-meilisearch-config__help">Dieses Produkt ist bereits ausgewählt.</p>
-          <div class="sw-meilisearch-config__add-row"><label>Weitere Sprachkennung <input v-model.trim="newLocale" :disabled="disabled" class="sw-meilisearch-config__input" placeholder="z. B. nl-NL"></label><sw-button :disabled="disabled || !localeValid" @click="addLocale">Sprache auswählen</sw-button></div>
         </template>
         <template v-else><p role="alert" class="sw-meilisearch-config__error">Die bestehende Einstellung ist ungültig oder enthält mehr als zehn Produkte je Sprache. Bitte korrigieren; sie wird nicht automatisch überschrieben.</p><textarea class="sw-meilisearch-config__input" :value="value" :disabled="disabled" @input="$emit('update:value', $event.target.value)"></textarea></template>
       </div>`,
     methods: {
         add() { if (!this.canAdd) return; this.$emit('update:value', JSON.stringify({...this.parsed.data, [this.locale]: [...this.products, this.productId]})); this.productId = null; },
         remove(id) { if (this.disabled) return; this.$emit('update:value', JSON.stringify({...this.parsed.data, [this.locale]: this.products.filter(product => product !== id)})); },
-        addLocale() { if (!this.localeValid) return; this.locale = this.newLocale; this.newLocale = ''; this.productId = null; },
     },
 });

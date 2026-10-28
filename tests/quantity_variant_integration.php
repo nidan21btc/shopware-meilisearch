@@ -68,7 +68,7 @@ foreach($domains as $locale=>$domain){
   // quantity. Give the fractional variant a clear engine-order advantage so
   // an incorrect amount promotion is observable in the rendered shop.
   $signedDocs=$decimalDocs;
-  foreach($signedDocs as $i=>&$doc){$doc['name']=$token;$doc['popularity']=$i===0?1000000:0;}unset($doc);
+  foreach($signedDocs as $i=>&$doc){$doc['name']=$token.($i===0?'':' extra');}unset($doc);
   $engine->mutate('POST','/indexes/'.$index.'/documents',$signedDocs);
   foreach(['- 1 ml','− 1 ml','+ 1 ml'] as $signed){
    $query=$token.' '.$signed;

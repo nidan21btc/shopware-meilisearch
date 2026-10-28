@@ -6,7 +6,7 @@ use Shopware\Core\Content\Product\SalesChannel\SalesChannelProductEntity;
 
 final class DocumentBuilder
 {
-    public function build(SalesChannelProductEntity $product, string $languageId, array $fields = IndexFields::DEFAULTS, int $popularity = 0, array $quantityUnits = []): ?array
+    public function build(SalesChannelProductEntity $product, string $languageId, array $fields = IndexFields::DEFAULTS, array $quantityUnits = []): ?array
     {
         $name = LanguageText::field($product, $languageId, 'name');
         // Classify the same visible name text that will actually be indexed.
@@ -61,7 +61,6 @@ final class DocumentBuilder
             // Prices and availability are resolved by Shopware at search time.
         ];
         $document = array_intersect_key($values, array_flip(['id', 'groupId', 'manufacturer', 'categories']));
-        $document['popularity'] = $popularity;
         foreach ($fields as $field) {
             if (str_starts_with($field, 'customFields.')) {
                 $key = substr($field, strlen('customFields.'));
@@ -103,7 +102,7 @@ final class DocumentBuilder
 
     public static function settings(array $synonyms, array $fields = IndexFields::DEFAULTS, string $locale = ''): array
     {
-        $rules = ['words', 'typo', 'proximity', 'attribute', 'exactness', 'popularity:desc', 'sort'];
+        $rules = ['words', 'typo', 'proximity', 'attribute', 'exactness', 'sort'];
         $shortTypos = in_array($locale, ['de-DE', 'es-ES', 'fr-FR', 'it-IT'], true);
         $oneTypoAtFour = $shortTypos || $locale === 'en-GB';
         $searchable = $fields;

@@ -1,1 +1,1 @@
-{"entryPoints":{"shopware-meilisearch":{"js":["/bundles/shopwaremeilisearch/administration/js/shopware-meilisearch.js?v=9"],"css":["/bundles/shopwaremeilisearch/administration/css/reindex.css?v=8"],"preload":[],"dynamic":[],"legacy":false}},"legacy":false,"metadatas":{},"viteServer":null}
+{"entryPoints":{"shopware-meilisearch":{"js":["/bundles/shopwaremeilisearch/administration/js/shopware-meilisearch.js?v=10"],"css":["/bundles/shopwaremeilisearch/administration/css/reindex.css?v=9"],"preload":[],"dynamic":[],"legacy":false}},"legacy":false,"metadatas":{},"viteServer":null}

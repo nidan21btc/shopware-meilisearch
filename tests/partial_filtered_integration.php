@@ -90,8 +90,8 @@ try{
  $original=array_merge($docs,[$seedDoc],$distractors,[$targetDoc]);$modified=$original;
  foreach($modified as $i=>&$doc){
   if($i<21)$doc['name']=$query;
-  elseif($i<46){$doc['name']=$second;$doc['popularity']=1000000;}
-  else {$doc['name']='extra '.$second;$doc['popularity']=0;}
+  elseif($i<46){$doc['name']=$second;}
+  else {$doc['name']='extra '.$second;}
  }
  unset($doc);$indexed=true;$engine->mutate('POST','/indexes/'.$index.'/documents',$modified);
  $main=$engine->request('POST','/indexes/'.$index.'/search',['q'=>$query,'page'=>1,'hitsPerPage'=>10000,'matchingStrategy'=>'frequency','attributesToRetrieve'=>['id']]);
@@ -113,8 +113,8 @@ try{
  $original=array_merge([$seedDoc],$familyDocs,[$targetDoc]);$modified=$original;
  foreach($modified as $i=>&$doc){
   if($i===0)$doc['name']=$query;
-  elseif($i<=20){$doc['name']=$second;$doc['popularity']=1000000;}
-  else {$doc['name']='extra '.$second;$doc['popularity']=0;}
+  elseif($i<=20){$doc['name']=$second;}
+  else {$doc['name']='extra '.$second;}
  }
  unset($doc);$indexed=true;$engine->mutate('POST','/indexes/'.$index.'/documents',$modified);
  $main=$engine->request('POST','/indexes/'.$index.'/search',['q'=>$query,'page'=>1,'hitsPerPage'=>10000,'matchingStrategy'=>'frequency','attributesToRetrieve'=>['id']]);

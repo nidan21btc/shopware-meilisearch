@@ -30,7 +30,7 @@ try {
   $chosen=[];$docs=[];foreach($rows as $row){$doc=$engine->request('GET','/indexes/'.$index.'/documents/'.$row['id'],allowMissing:true);if($doc!==null){$chosen[]=$row;$docs[]=$doc;}if(count($chosen)===21)break;}
   if(count($chosen)!==21)throw new RuntimeException('Twenty-one standalone indexed products are required.');
   $word='zq'.$token();$other='yx'.$token();$chars=str_split($word);$chars[3]=$chars[3]==='x'?'z':'x';$chars[8]=$chars[8]==='x'?'z':'x';$weak=implode('',$chars);$query=$word.' '.$other;
-  $modified=$docs;foreach($modified as $i=>&$doc){$doc['name']=($i<20?$word:$weak).' '.$other;$doc['popularity']=0;}unset($doc);
+  $modified=$docs;foreach($modified as $i=>&$doc){$doc['name']=($i<20?$word:$weak).' '.$other;}unset($doc);
   $indexed=false;
   try {
    $indexed=true;$engine->mutate('POST','/indexes/'.$index.'/documents',$modified);

@@ -38,7 +38,7 @@ visible text. `LanguageText`, `ParentTranslations` and variant-label helpers
 control language-local content rather than broadly importing fallback text.
 
 Meilisearch ranking prioritizes words, typos, proximity, attribute priority,
-exactness, optional popularity and requested sorting. Identifiers and quantities
+exactness and requested sorting. Identifiers and quantities
 have special exact-match behavior. Additional helpers handle Unicode/orthography,
 hyphen compounds, quantity representations, named variants and optional partial
 matches. `IdentifierFallback` supplements exact identifier matches through

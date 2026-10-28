@@ -15,7 +15,6 @@ exported data or prove that the candidate is as relevant as a reference service.
 | Tool(s) in `tools/` | Purpose |
 | --- | --- |
 | `export_product_paths.php`, `map_product_references.py` | Associate private reference URLs/identifiers with catalog products |
-| `build_popularity.py` | Prepare optional language-specific reviewed ranking inputs |
 | `capture_shopware.py`, `evaluate_shopware.py`, `evaluate_meilisearch.py` | Capture/evaluate candidate responses through their respective interfaces |
 | `compare_snapshots.py`, `compare_synthetic.py` | Compare rankings and synthetic query cases |
 | `evaluate_catalog_recall.py`, `evaluate_prefix_recall.py`, `evaluate_typo_tolerance.py`, `evaluate_umlaut_queries.py` | Focused recall, prefix and orthography checks |
@@ -33,16 +32,6 @@ builders accept explicitly prepared JSON inputs; their synthetic unit-test
 fixtures illustrate the respective schemas. No export from another search
 service is required to install or operate the plugin. Independently judged cases
 can be evaluated directly using the example below.
-
-Generated popularity weights must be reviewed before importing through:
-
-```sh
-php bin/console shopware-meilisearch:search:import-signals \
-  --sales-channel aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
-  --popularity /private/output/reviewed-popularity.json
-```
-
-The imported popularity weights require an index rebuild.
 
 ## Objective measures and their limits
 

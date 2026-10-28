@@ -24,11 +24,11 @@
             <label>Mengeneinheiten für die Suche</label>
             <helpText>Shopware-Einheiten und ihre Umrechnung auswählen. Das Indexfeld Menge muss aktiviert sein.</helpText>
         </component>
-        <input-field type="textarea">
+        <component name="sw-meilisearch-synonyms">
             <name>synonyms</name>
-            <label>Synonyme je Sprache als JSON</label>
-            <helpText>Zum Beispiel {"de-DE": {"blume": ["blüte"]}, "en-GB": {"flower": ["bloom"]}}. Keine Übernahme zwischen Sprachen. Nach Änderungen den Index neu aufbauen.</helpText>
-        </input-field>
+            <label>Synonyme je Sprache</label>
+            <helpText>Suchbegriffe und ihre Synonyme je Sprache auswählen. Nach Änderungen den Index neu aufbauen.</helpText>
+        </component>
         <component name="sw-meilisearch-query-suggestions">
             <name>popularQueries</name>
             <label>Suchvorschläge je Sprache</label>
@@ -39,10 +39,5 @@
             <label>Startprodukte je Sprache</label>
             <helpText>Je Sprache bis zu zehn Produkte auswählen. Nur aktuell sichtbare Produkte werden angezeigt.</helpText>
         </component>
-        <input-field type="textarea">
-            <name>popularityWeights</name>
-            <label>Produktbeliebtheit je Sprache als JSON</label>
-            <helpText>Optional: {"de-DE": {"PRODUKT_UUID": 12}, "en-GB": {"PRODUKT_UUID": 5}}. Sprachgetrennte Sortierhilfe nach Worttreffern und Tippfehlern. Nach Änderungen Index neu aufbauen.</helpText>
-        </input-field>
     </card>
 </config>
