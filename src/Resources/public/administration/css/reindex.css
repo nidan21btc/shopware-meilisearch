@@ -60,3 +60,142 @@
         flex-direction: column;
     }
 }
+
+.sw-meilisearch-config,
+.sw-meilisearch-config__field-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--scale-size-12, 12px);
+    min-width: 0;
+}
+
+.sw-meilisearch-config__help {
+    margin: 0;
+    color: var(--color-text-secondary-default, #52667a);
+    font-size: var(--font-size-xs, 12px);
+    line-height: 1.5;
+}
+
+.sw-meilisearch-config__ordered-list {
+    display: grid;
+    gap: var(--scale-size-8, 8px);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.sw-meilisearch-config__item,
+.sw-meilisearch-config__add-row,
+.sw-meilisearch-config__unit-add {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: var(--scale-size-8, 8px);
+}
+
+.sw-meilisearch-config__item {
+    align-items: center;
+}
+
+.sw-meilisearch-config__item-position {
+    color: var(--color-text-secondary-default, #52667a);
+    font-size: var(--font-size-xs, 12px);
+    min-width: 20px;
+    text-align: right;
+}
+
+.sw-meilisearch-config__item-name {
+    display: flex;
+    flex: 1 1 180px;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--scale-size-2, 2px) var(--scale-size-8, 8px);
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.sw-meilisearch-config__item-technical {
+    color: var(--color-text-secondary-default, #52667a);
+    font-size: var(--font-size-xs, 12px);
+    line-height: 1.4;
+    min-width: 0;
+}
+
+.sw-meilisearch-config__item-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--scale-size-4, 4px);
+}
+
+.sw-meilisearch-config__add-row > label,
+.sw-meilisearch-config__unit-add > label,
+.sw-meilisearch-config > label {
+    display: flex;
+    flex-direction: column;
+    gap: var(--scale-size-4, 4px);
+    font-size: var(--font-size-xs, 12px);
+}
+
+.sw-meilisearch-config__unit .sw-entity-single-select,
+.sw-meilisearch-config__unit-add .sw-entity-single-select,
+.sw-meilisearch-config__add-row .sw-entity-single-select {
+    flex: 1 1 220px;
+    min-width: 0;
+}
+
+.sw-meilisearch-config__input {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    padding: 8px 12px;
+    border: 1px solid var(--color-border-primary-default, #b1b9c7);
+    border-radius: 4px;
+    background: var(--color-background-primary-default, #fff);
+    color: inherit;
+    font: inherit;
+}
+
+.sw-meilisearch-config__input:focus-visible {
+    outline: 2px solid var(--color-border-brand-selected, #189eff);
+    outline-offset: 1px;
+}
+
+.sw-meilisearch-config__error {
+    margin: 0;
+    color: var(--color-text-critical-default, #b51b1b);
+}
+
+.sw-meilisearch-config__add-row > label,
+.sw-meilisearch-config__unit-add > label {
+    flex: 1 1 180px;
+}
+
+/* Shopware fields include a bottom margin intended for stacked forms. */
+.sw-meilisearch-config__unit-add .sw-entity-single-select {
+    margin-bottom: 0;
+}
+
+.sw-meilisearch-config__unit-add > label {
+    gap: var(--scale-size-8, 8px);
+}
+
+.sw-meilisearch-config__unit-add > label .sw-meilisearch-config__input {
+    height: 48px;
+}
+
+.sw-meilisearch-config__field-list .sw-meilisearch-config__add-row .sw-entity-single-select {
+    margin-bottom: 0;
+}
+
+.sw-meilisearch-config__field-list .sw-meilisearch-config__add-row > label {
+    gap: var(--scale-size-8, 8px);
+}
+
+.sw-meilisearch-config__field-list .sw-meilisearch-config__add-row > label .sw-meilisearch-config__input {
+    height: 48px;
+}
+
+.sw-meilisearch-config > button,
+.sw-meilisearch-config > .mt-button {
+    align-self: flex-start;
+}

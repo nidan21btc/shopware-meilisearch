@@ -10,7 +10,7 @@ const source = fs.readFileSync(path.join(root, 'src/Resources/app/administration
 const css = fs.readFileSync(path.join(root, 'src/Resources/public/administration/css/reindex.css'), 'utf8');
 assert.equal(js, source, 'Source and public administration assets must match');
 const manifest = JSON.parse(fs.readFileSync(path.join(root, 'src/Resources/public/administration/.vite/entrypoints.json')));
-assert(manifest.entryPoints['shopware-meilisearch'].css.includes('/bundles/shopwaremeilisearch/administration/css/reindex.css'));
+assert(manifest.entryPoints['shopware-meilisearch'].css.some(p => p.split('?')[0] === '/bundles/shopwaremeilisearch/administration/css/reindex.css'));
 (async () => {
  const browser = await chromium.launch({headless: true, args: ['--no-sandbox']});
  try {
@@ -20,7 +20,7 @@ assert(manifest.entryPoints['shopware-meilisearch'].css.includes('/bundles/shopw
   await page.addScriptTag({path: vue});
   await page.evaluate(() => {
    window.fixture={pending:false, posts:0, allow:true};
-   window.Shopware={Component:{register(_name, config){window.fixture.component=config;}},Mixin:{getByName(){return {methods:{createNotificationError(){},createNotificationSuccess(){}}};}},Application:{getContainer(){return {httpClient:{get:async()=>({data:{pending:window.fixture.pending,indexedAt:'2026-10-28 14:45:37.685'}}),post:async()=>{window.fixture.posts++;window.fixture.pending=true;return {data:{pending:true,indexedAt:'2026-10-28 14:45:37.685'}};}}};}}};
+   window.Shopware={Component:{register(name, config){if(name === 'sw-meilisearch-reindex') window.fixture.component=config;}},Mixin:{getByName(){return {methods:{createNotificationError(){},createNotificationSuccess(){}}};}},Application:{getContainer(){return {httpClient:{get:async()=>({data:{pending:window.fixture.pending,indexedAt:'2026-10-28 14:45:37.685'}}),post:async()=>{window.fixture.posts++;window.fixture.pending=true;return {data:{pending:true,indexedAt:'2026-10-28 14:45:37.685'}};}}};}}};
   });
   await page.addScriptTag({content: js});
   await page.evaluate(() => {

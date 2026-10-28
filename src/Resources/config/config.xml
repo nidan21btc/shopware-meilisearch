@@ -9,36 +9,36 @@
             <helpText>Erst nach dem Indexaufbau aktivieren und eine vorhandene Suche deaktivieren.</helpText>
             <defaultValue>false</defaultValue>
         </input-field>
-        <input-field type="textarea">
+        <component name="sw-meilisearch-index-fields">
             <name>indexFields</name>
-            <label>Durchsuchbare Indexfelder als JSON-Liste, nach Priorität</label>
-            <helpText>Leer = Standardauswahl. Beispiel: ["productNumber", "name", "customFields.mein_suchtext", "description"]. Frühere Felder erhalten mehr Gewicht. Standardfelder und eigene Produkt-Zusatzfelder sind kombinierbar. Zusatzfelder werden ausschließlich aus der jeweiligen Sprachübersetzung übernommen. Nach Änderungen Index neu aufbauen.</helpText>
-        </input-field>
-        <input-field type="textarea">
+            <label>Durchsuchbare Indexfelder</label>
+            <helpText>Felder in Prioritätsreihenfolge auswählen. Änderungen erfordern einen Neuaufbau.</helpText>
+        </component>
+        <component name="sw-meilisearch-language-fields">
             <name>indexFieldsByLanguage</name>
-            <label>Abweichende Indexfelder je Sprache als JSON</label>
-            <helpText>Optional: {"de-DE": ["name", "customFields.mein_deutsches_feld"], "en-GB": ["name", "customFields.mein_englisches_feld"]}. Für nicht aufgeführte Sprachen gilt die allgemeine Liste. Nach Änderungen den Index neu aufbauen.</helpText>
-        </input-field>
-        <input-field type="textarea">
+            <label>Abweichende Indexfelder je Sprache</label>
+            <helpText>Optional: pro Sprache eine andere Feldauswahl und Reihenfolge festlegen.</helpText>
+        </component>
+        <component name="sw-meilisearch-quantity-units">
             <name>quantityUnits</name>
-            <label>Technische Mengeneinheiten als JSON</label>
-            <helpText>Einheiten-UUIDs je Installation konfigurieren. Beispiel: {&quot;UNIT_UUID&quot;:{&quot;symbol&quot;:&quot;ml&quot;,&quot;factor&quot;:1000}}. Mögliche Symbole: ml, l, g, kg. Das Feld quantity muss durchsuchbar sein. Nach Änderungen Index neu aufbauen.</helpText>
-        </input-field>
+            <label>Mengeneinheiten für die Suche</label>
+            <helpText>Shopware-Einheiten und ihre Umrechnung auswählen. Das Indexfeld Menge muss aktiviert sein.</helpText>
+        </component>
         <input-field type="textarea">
             <name>synonyms</name>
             <label>Synonyme je Sprache als JSON</label>
             <helpText>Zum Beispiel {"de-DE": {"blume": ["blüte"]}, "en-GB": {"flower": ["bloom"]}}. Keine Übernahme zwischen Sprachen. Nach Änderungen den Index neu aufbauen.</helpText>
         </input-field>
-        <input-field type="textarea">
+        <component name="sw-meilisearch-query-suggestions">
             <name>popularQueries</name>
-            <label>Suchvorschläge je Sprache als JSON</label>
-            <helpText>Beispiel: {"de-DE": ["blume"], "en-GB": ["flower"]}. Konfiguriert die Startvorschläge für die angegebene Sprache; eine leere Liste blendet sie aus.</helpText>
-        </input-field>
-        <input-field type="textarea">
+            <label>Suchvorschläge je Sprache</label>
+            <helpText>Optionale Vorschläge beim Öffnen der Suche; ein Eintrag pro Zeile.</helpText>
+        </component>
+        <component name="sw-meilisearch-featured-products">
             <name>featuredProductIds</name>
-            <label>Startprodukte je Sprache als JSON</label>
-            <helpText>Leer = keine vordefinierten Startprodukte. Beispiel: {"de-DE": ["PRODUKT_UUID"], "en-GB": []}. Je Sprache bis zu zehn Produkt-UUIDs; eine leere Liste deaktiviert dort die Vorgaben. Nur aktuell sichtbare Produkte der Sprache werden angezeigt.</helpText>
-        </input-field>
+            <label>Startprodukte je Sprache</label>
+            <helpText>Je Sprache bis zu zehn Produkte auswählen. Nur aktuell sichtbare Produkte werden angezeigt.</helpText>
+        </component>
         <input-field type="textarea">
             <name>popularityWeights</name>
             <label>Produktbeliebtheit je Sprache als JSON</label>
@@ -52,7 +52,7 @@
         <input-field type="textarea">
             <name>queryClickFeedback</name>
             <label>Optionale Klicksignale für genaue Suchanfragen als JSON</label>
-            <helpText>Nur lokal erzeugte, geprüfte Signale importieren. Die Anfrage wird als Schlüsselwert statt im Klartext gespeichert. Nach Änderung des Suchdienst-Schlüssels müssen die Signale neu erzeugt werden.</helpText>
+            <helpText>Nur lokal erzeugte, geprüfte Signale importieren. Die Anfrage wird als Schlüsselwert statt im Klartext gespeichert. Nach Änderung des separaten Feedback-Schlüssels müssen die Signale neu erzeugt werden.</helpText>
         </input-field>
     </card>
 </config>

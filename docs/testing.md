@@ -14,8 +14,8 @@ Shopware's `vendor/` and `bin/console`, not to its public document root.
 GitHub Actions runs fast PHP and Python regressions and synthetic Chromium/Firefox
 browser tests on pushes to `main`, version tags, pull requests and manual runs.
 The synthetic administration layout check exercises desktop/mobile views, pending
-state and the rebuild/refresh controls; it does not replace a real administration
-integration test.
+state, rebuild/refresh controls and configuration editors; it does not replace a real
+administration integration test.
 CI installs isolated Shopware 6.7.14.0 dependencies from the committed lock file;
 it does not start a Shopware shop or run the database-writing integration suite.
 CI checks supplement the installation and acceptance checks below.
@@ -27,6 +27,8 @@ SHOPWARE_ROOT=/path/to/shopware php tests/run.php
 SHOPWARE_ROOT=/path/to/shopware php tests/search_guard.php
 SHOPWARE_ROOT=/path/to/shopware php tests/admission_metrics.php
 php tests/defaults.php
+SHOPWARE_ROOT=/path/to/shopware php tests/admin_config_schema.php
+node tests/admin_field_consistency.cjs
 SHOPWARE_ROOT=/path/to/shopware python3 -m unittest discover -s tests -p 'test_*.py'
 ```
 

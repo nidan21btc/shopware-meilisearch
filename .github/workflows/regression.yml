@@ -34,6 +34,8 @@ jobs:
           php tests/search_guard.php
           php tests/admission_metrics.php
           php tests/defaults.php
+          php tests/admin_config_schema.php
+          node tests/admin_field_consistency.cjs
           python3 -m unittest discover -s tests -p 'test_*.py'
       - name: Check packaged administration asset
         run: cmp src/Resources/app/administration/src/main.js src/Resources/public/administration/js/shopware-meilisearch.js
@@ -55,3 +57,4 @@ jobs:
           node tests/credentialed_page_url_browser.cjs
           node tests/remember_query_browser.cjs
           node tests/admin_reindex_layout.cjs
+          node tests/admin_configuration_controls.cjs

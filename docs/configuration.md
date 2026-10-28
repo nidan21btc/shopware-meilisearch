@@ -44,22 +44,62 @@ workers, database and host memory before using it. See [security](security.md).
 
 ## Administration fields
 
-| Field | Format and effect | Rebuild required? |
-| --- | --- | --- |
-| `enabled` | Boolean; overlay is disabled by default | Build before first enabling |
-| `indexFields` | Ordered JSON list of searchable fields | Yes |
-| `indexFieldsByLanguage` | Locale → field-list overrides | Yes |
-| `quantityUnits` | Unit UUID → symbol and conversion factor | Yes |
-| `synonyms` | Locale → word → alternatives | Yes |
-| `popularQueries` | Locale → list of suggested queries | No |
-| `featuredProductIds` | Locale → up to ten product UUIDs | No |
-| `popularityWeights` | Locale → product UUID → integer weight | Yes |
-| `queryHints` | Locale → product UUID → reviewed query strings | Yes |
-| `queryClickFeedback` | Versioned keyed query/product weights | No; secret must match |
+| Backend label | Configuration key | Format and effect | Rebuild required? |
+| --- | --- | --- | --- |
+| Suchoverlay aktivieren | `enabled` | Boolean; disabled by default | Build before first enabling |
+| Durchsuchbare Indexfelder | `indexFields` | Ordered list of searchable fields | Yes |
+| Abweichende Indexfelder je Sprache | `indexFieldsByLanguage` | Locale → field-list overrides | Yes |
+| Mengeneinheiten für die Suche | `quantityUnits` | Unit UUID → symbol and conversion factor | Yes |
+| Synonyme je Sprache | `synonyms` | Locale → word → alternatives | Yes |
+| Suchvorschläge je Sprache | `popularQueries` | Locale → list of suggested queries | No |
+| Startprodukte je Sprache | `featuredProductIds` | Locale → up to ten product UUIDs | No |
+| Produktbeliebtheit je Sprache | `popularityWeights` | Locale → product UUID → integer weight | Yes |
+| Historische Suchbegriffe je Produkt und Sprache | `queryHints` | Locale → product UUID → reviewed query strings | Yes |
+| Optionale Klicksignale für genaue Suchanfragen | `queryClickFeedback` | Versioned keyed query/product weights | No; feedback secret must match |
 
 The backend button **Suchindex jetzt neu aufbauen** requests a background build
 for all enabled channels and their storefront languages. Save settings before
 clicking. It does not run an expensive build inside the browser request.
+
+### Selecting fields, units, suggestions and featured products in the administration
+
+Select a sales channel first. A channel can inherit a global setting or override
+it; for example, the overlay can be off globally and on for one channel. Editing
+an inherited field requires switching it to a channel-specific value through
+Shopware's inheritance control. Save settings before requesting a rebuild.
+
+- **Durchsuchbare Indexfelder:** Select standard fields or existing custom fields and click **Hinzufügen**,
+  then use the arrows to order them. Higher entries have higher attribute-ranking
+  priority. Empty saved configuration means the standard selection; it is not
+  written merely by opening the screen. The reset button restores that default.
+  Custom fields must be assigned to products; only scalar, language-local content
+  is indexed. The selection is limited to 64 distinct supported fields.
+- **Abweichende Indexfelder je Sprache:** Pick a locale and create an override
+  only when necessary. Unlisted locales use the general fields. A new override
+  starts with the standard fields and can be reordered or removed. Existing other
+  locales remain unchanged. Additional locale codes may be entered explicitly.
+- **Mengeneinheiten für die Suche:** Select an existing Shopware unit, a search
+  symbol and a factor, then add it. The factor is the number of search symbols
+  in one stored Shopware unit: litre → `l` and millilitre → `ml` use factor `1`.
+  An unambiguous unit short code is suggested; confirm it before adding. Remove
+  and re-add a mapping to change it. Keep `quantity` among the searchable fields.
+  Empty configuration disables structured quantity derivation, not ordinary search.
+- **Suchvorschläge je Sprache:** Select a locale and enter one suggestion per
+  line. At most ten valid suggestions are shown. An empty list hides suggestions
+  for that language; other languages are preserved. Suggestions take effect
+  without rebuilding the index.
+
+- **Startprodukte je Sprache:** Choose a language and add up to ten products
+  using Shopware’s product selector. Remove products individually; other
+  languages remain unchanged. Only products currently visible in the sales
+  channel can appear. Save changes; a rebuild is not required.
+
+The controls preserve the existing JSON storage format. Opening a control does
+not rewrite values. If an existing value cannot be interpreted safely, the UI
+shows it for correction instead of silently replacing it. Index fields, locale
+overrides and unit mappings require a successful rebuild after saving. More
+advanced synonym, popularity, hint and keyed-feedback inputs retain their JSON or
+reviewed-import workflows; keyed feedback uses the separate feedback secret.
 
 ## Searchable fields and language handling
 
