@@ -1,4 +1,5 @@
 <?php declare(strict_types=1);
+require_once __DIR__.'/pending_revision.php';
 // Changes configured search fields while a scheduler worker is rebuilding indexes.
 use Doctrine\DBAL\Connection;
 use ShopwareMeilisearch\Command\IndexCommand;
@@ -36,7 +37,7 @@ foreach($keys as $key){
  if($original[$key]!==null&&!is_string($original[$key]))throw new RuntimeException('Unexpected field configuration type.');
 }
 $state=new DirtyState($db);$indexer=new Indexer($engine,$container->get('sales_channel.product.repository'),new DocumentBuilder(),new ParentTranslations($container->get('product.repository')),$config,$root.'/var/shopware-meilisearch');
-$command=new IndexCommand($indexer,$container->get(CachedSalesChannelContextFactory::class),$db,$config);$handler=new ReindexTaskHandler($container->get('scheduled_task.repository'),new NullLogger(),$command,$state);
+$command=new IndexCommand($indexer,$container->get(CachedSalesChannelContextFactory::class),$db,$config);$handler=new ReindexTaskHandler($container->get('scheduled_task.repository'),new NullLogger(),$command,$state,$root.'/var/shopware-meilisearch');
 $oldFields=['name','productNumber'];$newFields=['productNumber','name','description'];$oldJson=json_encode($oldFields,JSON_THROW_ON_ERROR);$newJson=json_encode($newFields,JSON_THROW_ON_ERROR);
 $published=static function(string $locale)use($engine,$channel,$domains):array{
  $index=Engine::indexName($channel,$domains[$locale]['language']);$fields=$engine->request('GET','/indexes/'.$index.'/settings/searchable-attributes');
@@ -49,7 +50,7 @@ $changed=false;
 try{
  $db->executeStatement("UPDATE scheduled_task SET status='inactive' WHERE name<>'shopware.meilisearch.reindex'");
  $changed=true;$config->set($keys[0],$oldJson);$config->delete($keys[1]);
- $initialRevision=$state->revisionToBuild();if($initialRevision===null)throw new RuntimeException('Field changes did not mark an index revision.');
+ $initialRevision=searchPendingRevisionForTest($db);if($initialRevision===null)throw new RuntimeException('Field changes did not mark an index revision.');
  $db->executeStatement("UPDATE scheduled_task SET status='scheduled',next_execution_time='2000-01-01 00:00:00.000' WHERE name='shopware.meilisearch.reindex'");
  $environment=['MESSENGER_TRANSPORT_DSN'=>'doctrine://default?auto_setup=false&queue_name='.$queue];
  $scheduler=new Symfony\Component\Process\Process([PHP_BINARY,'bin/console','scheduled-task:run','--no-wait'],$root,$environment);$scheduler->setTimeout(300);if($scheduler->run()!==0)throw new RuntimeException('Scheduler command failed.');
@@ -65,13 +66,13 @@ try{
   $config->set($keys[0],$newJson);
  }finally{$worker->wait();}
  if(!$worker->isSuccessful()||(int)$db->fetchOne('SELECT COUNT(*) FROM messenger_messages WHERE queue_name=:queue',['queue'=>$queue])!==0)throw new RuntimeException('Search worker failed or did not consume its task.');
- $pending=$state->revisionToBuild();if($pending===null||$pending<=$initialRevision)throw new RuntimeException('The later field change was not left pending.');
- $handler->run();if($state->revisionToBuild()!==null)throw new RuntimeException('Follow-up field rebuild remains pending.');
+ $pending=searchPendingRevisionForTest($db);if($pending===null||$pending<=$initialRevision)throw new RuntimeException('The later field change was not left pending.');
+ $state->requestRebuild();$handler->run();if(searchPendingRevisionForTest($db)!==null)throw new RuntimeException('Follow-up field rebuild remains pending.');
  foreach($domains as $locale=>$domain)if($published($locale)!==$newFields)throw new RuntimeException('The follow-up field selection was not published in '.$locale);
  echo "A field change during the worker rebuild remained pending and was published in all five language indexes.\n";
 }finally{
  try{
-  if($changed){foreach($original as $key=>$value){if($value===null)$config->delete($key);else $config->set($key,$value);}if($state->revisionToBuild()===null)$state->markDirty();$handler->run();
+  if($changed){foreach($original as $key=>$value){if($value===null)$config->delete($key);else $config->set($key,$value);}if(searchPendingRevisionForTest($db)===null)$state->markDirty();$state->requestRebuild();$state->requestRebuild();$handler->run();
    foreach($domains as $locale=>$domain){$expected=ShopwareMeilisearch\Search\IndexFields::forLocale($original[$keys[0]]??'',$original[$keys[1]]??'',$locale);if($published($locale)!==$expected)throw new RuntimeException('The original published fields were not restored in '.$locale);}
    echo "Original search field configuration and indexes restored.\n";}
  }finally{

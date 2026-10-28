@@ -1,0 +1,27 @@
+<?php declare(strict_types=1);
+// Only an explicitly isolated disposable database may be modified.
+require (getenv('SHOPWARE_ROOT') ?: dirname(__DIR__,4)).'/vendor/autoload.php';
+require dirname(__DIR__).'/src/Search/DirtyState.php';
+require dirname(__DIR__).'/src/Migration/Migration1793120000SearchIndexState.php';
+require dirname(__DIR__).'/src/Migration/Migration1793180000DailyReindex.php';
+use Doctrine\DBAL\DriverManager;
+use Doctrine\DBAL\Tools\DsnParser;
+use ShopwareMeilisearch\Search\DirtyState;
+$url=getenv('DATABASE_URL')?:'';
+if(!preg_match('~^/el_search_test_[a-f0-9]+$~D',parse_url($url,PHP_URL_PATH)?:''))throw new RuntimeException('Isolated test database required');
+$c=DriverManager::getConnection((new DsnParser(['mysql'=>'pdo_mysql']))->parse($url));
+(new ShopwareMeilisearch\Migration\Migration1793120000SearchIndexState())->update($c);
+(new ShopwareMeilisearch\Migration\Migration1793180000DailyReindex())->update($c);
+$c->executeStatement('UPDATE shopware_meilisearch_state SET revision=1,indexed_revision=0,indexed_at=NULL,attempted_at=NULL,requested_revision=0,completed_request_revision=0 WHERE id=1');
+$s=new DirtyState($c);
+$check=static function(bool $ok,string $m){if(!$ok)throw new RuntimeException($m);};
+$check($s->revisionToBuild()===1,'First build missing');$s->completed(1);
+$s->markDirty();$check($s->revisionToBuild()===null,'Product write must wait for daily reconciliation');
+$c->executeStatement('UPDATE shopware_meilisearch_state SET indexed_at=DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 23 HOUR) WHERE id=1');$check($s->revisionToBuild()===null,'Rebuilt before one day');
+$c->executeStatement('UPDATE shopware_meilisearch_state SET indexed_at=DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 25 HOUR) WHERE id=1');$check($s->revisionToBuild()===2,'Daily build missing');$s->completed(2);
+$s->requestRebuild();$r=$s->requestedRevision();$s->requestRebuild();$check($s->requestedRevision()===$r,'Repeated requests must coalesce');$check($s->revisionToBuild()===2,'Manual request ignored');
+$s->started();$check($s->revisionToBuild()===null,'Failed or running build must not be hammered every minute');
+$c->executeStatement('UPDATE shopware_meilisearch_state SET attempted_at=DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 16 MINUTE) WHERE id=1');$check($s->revisionToBuild()===2,'Retry not permitted after backoff');
+$s->completed(2,$r);$check(!$s->status()['pending'] && $s->revisionToBuild()===null,'Manual request not acknowledged');
+$s->requestRebuild();$check($s->requestedRevision()===$r+1,'Next manual request not accepted');
+echo "Daily and manual reindex integration checks passed.\n";

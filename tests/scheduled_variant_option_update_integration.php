@@ -1,4 +1,5 @@
 <?php declare(strict_types=1);
+require_once __DIR__.'/pending_revision.php';
 // Changes localized variant-option labels and verifies display and scheduled indexing.
 use Doctrine\DBAL\Connection;
 use ShopwareMeilisearch\Command\IndexCommand;
@@ -43,18 +44,18 @@ $product=null;foreach($candidates as $row)if($fetch('de-DE',$row['number'],$row[
 if($product===null)throw new RuntimeException('A visible variant with German and English option translations is required.');
 $deToken='zq'.strtr(bin2hex(random_bytes(12)),'0123456789abcdef','abcdefghijklmnop');$enToken='yx'.strtr(bin2hex(random_bytes(12)),'0123456789abcdef','abcdefghijklmnop');
 $state=new DirtyState($db);$indexer=new Indexer($engine,$container->get('sales_channel.product.repository'),new DocumentBuilder(),new ParentTranslations($container->get('product.repository')),$config,$root.'/var/shopware-meilisearch');
-$command=new IndexCommand($indexer,$container->get(CachedSalesChannelContextFactory::class),$db,$config);$handler=new ReindexTaskHandler($container->get('scheduled_task.repository'),new NullLogger(),$command,$state);
+$command=new IndexCommand($indexer,$container->get(CachedSalesChannelContextFactory::class),$db,$config);$handler=new ReindexTaskHandler($container->get('scheduled_task.repository'),new NullLogger(),$command,$state,$root.'/var/shopware-meilisearch');
 $repository=$container->get('property_group_option_translation.repository');$context=Context::createDefaultContext();$changed=false;
 try{
  $before=(int)$db->fetchOne('SELECT revision FROM shopware_meilisearch_state WHERE id=1');$changed=true;
  $repository->update([['propertyGroupOptionId'=>$product['option_id'],'languageId'=>$domains['de-DE']['language'],'name'=>$deToken],['propertyGroupOptionId'=>$product['option_id'],'languageId'=>$domains['en-GB']['language'],'name'=>$enToken]],$context);
- $after=(int)$db->fetchOne('SELECT revision FROM shopware_meilisearch_state WHERE id=1');if($after<=$before||$state->revisionToBuild()!==$after)throw new RuntimeException('Option translation write did not mark the index dirty.');
+ $after=(int)$db->fetchOne('SELECT revision FROM shopware_meilisearch_state WHERE id=1');if($after<=$before||searchPendingRevisionForTest($db)!==$after)throw new RuntimeException('Option translation write did not mark the index dirty.');
  foreach(['de-DE'=>$deToken,'en-GB'=>$enToken] as $locale=>$token){
   $other=$locale==='de-DE'?$enToken:$deToken;$shown=$fetch($locale,$product['number'],$product['product_id']);
   if(!$shown['visible']||!str_contains($shown['options'],$token)||str_contains($shown['options'],$other))throw new RuntimeException('Current option label did not update locally in '.$locale);
   $index=Engine::indexName($channel,$domains[$locale]['language']);$doc=$engine->request('GET','/indexes/'.$index.'/documents/'.$product['product_id']);if(in_array($token,$doc['properties']??[],true))throw new RuntimeException('Unpublished option appeared in the index.');
  }
- $handler->run();if($state->revisionToBuild()!==null)throw new RuntimeException('Option index task remains pending.');
+ $state->requestRebuild();$handler->run();if(searchPendingRevisionForTest($db)!==null)throw new RuntimeException('Option index task remains pending.');
  foreach($domains as $locale=>$domain){$index=Engine::indexName($channel,$domain['language']);$doc=$engine->request('GET','/indexes/'.$index.'/documents/'.$product['product_id'],allowMissing:true);if($doc===null)continue;
   foreach(['de-DE'=>$deToken,'en-GB'=>$enToken] as $expectedLocale=>$token){$indexed=in_array($token,$doc['properties']??[],true);if($indexed!==($locale===$expectedLocale))throw new RuntimeException('Option text crossed a language boundary.');}
   if(isset(['de-DE'=>$deToken,'en-GB'=>$enToken][$locale])){
@@ -65,7 +66,7 @@ try{
  }
  echo "Option edits update card labels immediately and rebuild language-local search indexes.\n";
 }finally{
- if($changed){$repository->update([['propertyGroupOptionId'=>$product['option_id'],'languageId'=>$domains['de-DE']['language'],'name'=>$product['de_option']],['propertyGroupOptionId'=>$product['option_id'],'languageId'=>$domains['en-GB']['language'],'name'=>$product['en_option']]],$context);if($state->revisionToBuild()===null)$state->markDirty();$handler->run();
+ if($changed){$repository->update([['propertyGroupOptionId'=>$product['option_id'],'languageId'=>$domains['de-DE']['language'],'name'=>$product['de_option']],['propertyGroupOptionId'=>$product['option_id'],'languageId'=>$domains['en-GB']['language'],'name'=>$product['en_option']]],$context);if(searchPendingRevisionForTest($db)===null)$state->markDirty();$state->requestRebuild();$state->requestRebuild();$handler->run();
   foreach(['de-DE'=>$deToken,'en-GB'=>$enToken] as $locale=>$token){$shown=$fetch($locale,$product['number'],$product['product_id']);if(!$shown['visible']||str_contains($shown['options'],$token))throw new RuntimeException('The original option display was not restored.');$doc=$engine->request('GET','/indexes/'.Engine::indexName($channel,$domains[$locale]['language']).'/documents/'.$product['product_id']);if(in_array($token,$doc['properties']??[],true))throw new RuntimeException('The original option index was not restored.');}
   echo "Original option translations and published indexes restored.\n";
  }

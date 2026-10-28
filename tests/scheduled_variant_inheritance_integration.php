@@ -1,4 +1,5 @@
 <?php declare(strict_types=1);
+require_once __DIR__.'/pending_revision.php';
 // Tests same-language inheritance and index updates on an isolated Shopware copy.
 use Doctrine\DBAL\Connection;
 use ShopwareMeilisearch\Command\IndexCommand;
@@ -41,7 +42,7 @@ if($product===null)throw new RuntimeException('A visible inheriting German/Engli
 $deToken='zq'.strtr(bin2hex(random_bytes(12)),'0123456789abcdef','abcdefghijklmnop');$enToken='yx'.strtr(bin2hex(random_bytes(12)),'0123456789abcdef','abcdefghijklmnop');
 $state=new DirtyState($db);$indexer=new Indexer($engine,$container->get('sales_channel.product.repository'),new DocumentBuilder(),new ParentTranslations($container->get('product.repository')),$config,$root.'/var/shopware-meilisearch');
 $command=new IndexCommand($indexer,$container->get(CachedSalesChannelContextFactory::class),$db,$config);
-$handler=new ReindexTaskHandler($container->get('scheduled_task.repository'),new NullLogger(),$command,$state);
+$handler=new ReindexTaskHandler($container->get('scheduled_task.repository'),new NullLogger(),$command,$state,$root.'/var/shopware-meilisearch');
 $repository=$container->get('product_translation.repository');$context=Context::createDefaultContext();$changed=false;
 try {
  $before=(int)$db->fetchOne('SELECT revision FROM shopware_meilisearch_state WHERE id=1');
@@ -52,8 +53,8 @@ try {
   ['productId'=>$product['child_id'],'languageId'=>$domains['en-GB']['language'],'keywords'=>null],
  ],$context);
  $after=(int)$db->fetchOne('SELECT revision FROM shopware_meilisearch_state WHERE id=1');
- if($after<=$before||$state->revisionToBuild()!==$after)throw new RuntimeException('Parent translation updates did not mark the indexes dirty.');
- $handler->run();
+ if($after<=$before||searchPendingRevisionForTest($db)!==$after)throw new RuntimeException('Parent translation updates did not mark the indexes dirty.');
+ $state->requestRebuild();$handler->run();
  foreach($domains as $locale=>$domain){
   $index=Engine::indexName($channel,$domain['language']);$doc=$engine->request('GET','/indexes/'.$index.'/documents/'.$product['child_id'],allowMissing:true);
   if($locale==='de-DE'||$locale==='en-GB'){
@@ -72,7 +73,7 @@ try {
    ['productId'=>$product['child_id'],'languageId'=>$domains['de-DE']['language'],'keywords'=>$product['child_de_keywords']],
    ['productId'=>$product['child_id'],'languageId'=>$domains['en-GB']['language'],'keywords'=>$product['child_en_keywords']],
   ],$context);
-  if($state->revisionToBuild()===null)$state->markDirty();$handler->run();
+  if(searchPendingRevisionForTest($db)===null)$state->markDirty();$state->requestRebuild();$state->requestRebuild();$handler->run();
   foreach($domains as $locale=>$domain)if($search($locale,$deToken,$product['child_id'])||$search($locale,$enToken,$product['child_id']))throw new RuntimeException('The original parent translation was not restored in '.$locale);
   echo "Original parent translations and published indexes restored.\n";
  }

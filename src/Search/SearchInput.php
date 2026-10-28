@@ -38,8 +38,9 @@ final readonly class SearchInput
         if (!in_array($sort, ['relevance', 'price-asc', 'price-desc', 'name-asc'], true)) {
             throw new BadRequestHttpException('Invalid sorting.');
         }
-        $min = self::price($request->query->getString('minPrice'));
-        $max = self::price($request->query->getString('maxPrice'));
+        if ($request->query->has('minPrice') || $request->query->has('maxPrice')) throw new BadRequestHttpException('Price range filters are not supported.');
+        $min = null;
+        $max = null;
         if ($min !== null && $max !== null && $min > $max) {
             throw new BadRequestHttpException('Invalid price range.');
         }

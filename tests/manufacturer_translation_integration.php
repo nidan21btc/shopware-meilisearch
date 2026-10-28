@@ -1,4 +1,5 @@
 <?php declare(strict_types=1);
+require_once __DIR__.'/pending_revision.php';
 // Exercises same-language manufacturer translation, indexing and storefront facets.
 use Doctrine\DBAL\Connection;
 use ShopwareMeilisearch\Command\IndexCommand;
@@ -45,14 +46,14 @@ $token='zq'.strtr(bin2hex(random_bytes(12)),'0123456789abcdef','abcdefghijklmnop
 foreach($domains as $locale=>$_)if($search($locale,$token)->query('//article[@data-product-id="'.$product['id'].'"]')->length)throw new RuntimeException('Synthetic term was already present.');
 $state=new DirtyState($db);$indexer=new Indexer($engine,$container->get('sales_channel.product.repository'),new DocumentBuilder(),new ParentTranslations($container->get('product.repository')),$config,$root.'/var/shopware-meilisearch');
 $command=new IndexCommand($indexer,$container->get(CachedSalesChannelContextFactory::class),$db,$config);
-$handler=new ReindexTaskHandler($container->get('scheduled_task.repository'),new NullLogger(),$command,$state);
+$handler=new ReindexTaskHandler($container->get('scheduled_task.repository'),new NullLogger(),$command,$state,$root.'/var/shopware-meilisearch');
 $repository=$container->get('product_manufacturer_translation.repository');$context=Context::createDefaultContext();$changed=false;
 try {
  $before=(int)$db->fetchOne('SELECT revision FROM shopware_meilisearch_state WHERE id=1');
  $changed=true;$repository->upsert([['productManufacturerId'=>$product['manufacturer'],'languageId'=>$it,'name'=>$token]],$context);
- if((int)$db->fetchOne('SELECT revision FROM shopware_meilisearch_state WHERE id=1')<=$before||$state->revisionToBuild()===null)throw new RuntimeException('Manufacturer translation write did not mark the index dirty.');
- $handler->run();
- if($state->revisionToBuild()!==null)throw new RuntimeException('Manufacturer index revision remains pending.');
+ if((int)$db->fetchOne('SELECT revision FROM shopware_meilisearch_state WHERE id=1')<=$before||searchPendingRevisionForTest($db)===null)throw new RuntimeException('Manufacturer translation write did not mark the index dirty.');
+ $state->requestRebuild();$handler->run();
+ if(searchPendingRevisionForTest($db)!==null)throw new RuntimeException('Manufacturer index revision remains pending.');
  $result=$search('it-IT',$token);
  if(!$result->query('//article[@data-product-id="'.$product['id'].'"]')->length)throw new RuntimeException('Italian manufacturer search did not find the product.');
  if(!$result->query('//input[@name="manufacturer[]" and @value="'.$product['manufacturer'].'"]/parent::label[contains(.,"'.$token.'")]')->length)throw new RuntimeException('Italian manufacturer facet was not shown.');
@@ -61,8 +62,8 @@ try {
 }finally{
  if($changed){
   if((int)$db->fetchOne('SELECT COUNT(*) FROM product_manufacturer_translation WHERE product_manufacturer_id=UNHEX(:manufacturer) AND language_id=UNHEX(:language)',['manufacturer'=>$product['manufacturer'],'language'=>$it]))$repository->delete([['productManufacturerId'=>$product['manufacturer'],'languageId'=>$it]],$context);
-  if($state->revisionToBuild()===null)$state->markDirty();
-  $handler->run();
+  if(searchPendingRevisionForTest($db)===null)$state->markDirty();$state->requestRebuild();
+  $state->requestRebuild();$handler->run();
   if($search('it-IT',$token)->query('//article[@data-product-id="'.$product['id'].'"]')->length)throw new RuntimeException('Test manufacturer remained searchable after restoration.');
   if((int)$db->fetchOne('SELECT COUNT(*) FROM product_manufacturer_translation WHERE product_manufacturer_id=UNHEX(:manufacturer) AND language_id=UNHEX(:language)',['manufacturer'=>$product['manufacturer'],'language'=>$it]))throw new RuntimeException('Test translation was not removed.');
   echo "Original manufacturer translation state and indexes restored.\n";

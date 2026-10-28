@@ -23,6 +23,7 @@ class SearchController extends StorefrontController
         private readonly SearchService $search,
         private readonly SystemConfigService $config,
         private readonly LoggerInterface $logger,
+        private readonly \ShopwareMeilisearch\Security\SearchRequestGuard $guard,
     ) {
     }
 
@@ -32,6 +33,7 @@ class SearchController extends StorefrontController
         if (!$this->config->getBool('ShopwareMeilisearch.config.enabled', $context->getSalesChannelId())) {
             throw new NotFoundHttpException();
         }
+        if (($denied = $this->guard->enter($request)) !== null) return $denied;
         // Four-letter English typos can themselves be valid short words.
         // Keep the exact matches first, but show their alternatives by default.
         $input = SearchInput::fromRequest($request, $context->getLanguageInfo()->localeCode === 'en-GB');

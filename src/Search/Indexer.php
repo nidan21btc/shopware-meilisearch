@@ -26,7 +26,7 @@ final class Indexer
     {
         $this->engine->ensureCompatible();
         $index = Engine::indexName($context->getSalesChannelId(), $context->getLanguageId());
-        if (!is_dir($this->lockDirectory) && !mkdir($this->lockDirectory, 0770, true) && !is_dir($this->lockDirectory)) {
+        if (!is_dir($this->lockDirectory) && !mkdir($this->lockDirectory, 0700, true) && !is_dir($this->lockDirectory)) {
             throw new \RuntimeException('Cannot create search lock directory.');
         }
         $lock = fopen($this->lockDirectory . '/' . $index . '.lock', 'c');

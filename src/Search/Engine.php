@@ -8,12 +8,15 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
 final class Engine
 {
     private bool $versionChecked = false;
+    private readonly string $key;
     public function __construct(
         private readonly HttpClientInterface $http,
         private readonly string $url,
-        private readonly string $key,
+        string|\ShopwareMeilisearch\Security\Secret $key,
         private readonly string $socketPath = '',
+        private readonly string|\ShopwareMeilisearch\Security\Secret $statusKey = '',
     ) {
+        $this->key = (string) $key;
     }
 
     public static function indexName(string $salesChannelId, string $languageId): string
@@ -52,7 +55,7 @@ final class Engine
             throw new \RuntimeException('SHOPWARE_MEILISEARCH_URL must use a local loopback address.');
         }
         $options = [
-            'headers' => ['Authorization' => 'Bearer ' . $this->key],
+            'headers' => ['Authorization' => 'Bearer ' . (($path === '/version' || str_starts_with($path, '/tasks/')) && (string) $this->statusKey !== '' ? (string) $this->statusKey : $this->key)],
             'timeout' => 3,
             'max_duration' => 10,
             'max_redirects' => 0,

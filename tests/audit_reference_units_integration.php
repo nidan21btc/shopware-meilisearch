@@ -1,4 +1,5 @@
 <?php declare(strict_types=1);
+require_once __DIR__.'/pending_revision.php';
 // Verify missing reference-unit reporting in an isolated Shopware copy.
 use Doctrine\DBAL\Connection;
 use ShopwareMeilisearch\Command\IndexCommand;
@@ -37,7 +38,7 @@ $key='ShopwareMeilisearch.config.quantityUnits';
 if((int)$db->fetchOne('SELECT COUNT(*) FROM system_config WHERE configuration_key=:key AND sales_channel_id IS NOT NULL',['key'=>$key]))throw new RuntimeException('No channel-specific unit mapping allowed.');
 $prior=$db->fetchAssociative('SELECT configuration_value FROM system_config WHERE configuration_key=:key AND sales_channel_id IS NULL',['key'=>$key]);
 $state=new DirtyState($db);$indexer=new Indexer($engine,$container->get('sales_channel.product.repository'),new DocumentBuilder(),new ParentTranslations($container->get('product.repository')),$config,$root.'/var/shopware-meilisearch');
-$command=new IndexCommand($indexer,$container->get(CachedSalesChannelContextFactory::class),$db,$config);$handler=new ReindexTaskHandler($container->get('scheduled_task.repository'),new NullLogger(),$command,$state);
+$command=new IndexCommand($indexer,$container->get(CachedSalesChannelContextFactory::class),$db,$config);$handler=new ReindexTaskHandler($container->get('scheduled_task.repository'),new NullLogger(),$command,$state,$root.'/var/shopware-meilisearch');
 $run=static function(int $expected)use($root):array{
  $process=new Symfony\Component\Process\Process([PHP_BINARY,'bin/console','shopware-meilisearch:search:audit-reference-units','--require-complete'],$root);$process->setTimeout(120);
  if($process->run()!==$expected)throw new RuntimeException('Unexpected reference-unit audit status.');$data=json_decode($process->getOutput(),true,512,JSON_THROW_ON_ERROR);
@@ -55,7 +56,7 @@ try{
  if($changed){
   $repository->update([['unitId'=>$unitId,'languageId'=>$domains['de-DE']['language'],'name'=>$original['name']]],$context);
   if($prior===false)$config->delete($key);else $config->set($key,json_decode($prior['configuration_value'],true,512,JSON_THROW_ON_ERROR)['_value']);
-  if($state->revisionToBuild()!==null)$handler->run();
+  if(searchPendingRevisionForTest($db)!==null)$state->requestRebuild();$handler->run();
   $restored=$run(0);foreach($restored as $report)if(($report['missingReferenceUnits']??null)!==0)throw new RuntimeException('Reference units were not restored.');
   echo "Original unit translation, mapping and indexes restored.\n";
  }

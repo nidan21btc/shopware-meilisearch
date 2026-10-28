@@ -1,4 +1,5 @@
 <?php declare(strict_types=1);
+require_once __DIR__.'/pending_revision.php';
 // Verify reference-unit labels use the current language or a neutral mapped unit.
 use Doctrine\DBAL\Connection;
 use ShopwareMeilisearch\Command\IndexCommand;
@@ -45,7 +46,7 @@ $candidates=$db->fetchAllAssociative("SELECT LOWER(HEX(p.id)) id,p.product_numbe
 $product=null;foreach($candidates as $candidate){$valid=true;foreach($domains as $locale=>$domain)if($fetch($locale,$candidate['number'],$candidate['id'])===null){$valid=false;break;}if($valid){$product=$candidate;break;}}
 if($product===null)throw new RuntimeException('A visible product with a reference price in all languages is required.');
 $state=new DirtyState($db);$indexer=new Indexer($engine,$container->get('sales_channel.product.repository'),new DocumentBuilder(),new ParentTranslations($container->get('product.repository')),$config,$root.'/var/shopware-meilisearch');
-$command=new IndexCommand($indexer,$container->get(CachedSalesChannelContextFactory::class),$db,$config);$handler=new ReindexTaskHandler($container->get('scheduled_task.repository'),new NullLogger(),$command,$state);
+$command=new IndexCommand($indexer,$container->get(CachedSalesChannelContextFactory::class),$db,$config);$handler=new ReindexTaskHandler($container->get('scheduled_task.repository'),new NullLogger(),$command,$state,$root.'/var/shopware-meilisearch');
 $repository=$container->get('unit_translation.repository');$context=Context::createDefaultContext();$changed=false;$token='Pruefeinheit'.bin2hex(random_bytes(4));
 try{
  $changed=true;$repository->update([['unitId'=>$unitId,'languageId'=>$domains['de-DE']['language'],'name'=>$token]],$context);
@@ -58,7 +59,7 @@ try{
 }finally{
  if($changed){
   $repository->update([['unitId'=>$unitId,'languageId'=>$domains['de-DE']['language'],'name'=>$original['name']]],$context);
-  if($state->revisionToBuild()!==null)$handler->run();
+  if(searchPendingRevisionForTest($db)!==null)$state->requestRebuild();$handler->run();
   foreach($domains as $locale=>$domain){$label=$fetch($locale,$product['number'],$product['id']);if($label===null||str_contains($label,$token))throw new RuntimeException('Original reference unit was not restored in '.$locale);}
   echo "Original unit translation and indexes restored.\n";
  }

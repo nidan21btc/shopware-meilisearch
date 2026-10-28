@@ -44,7 +44,7 @@ final class IdentifierFallback
         $searchable = $this->engine->request('GET', '/indexes/' . $index . '/settings/searchable-attributes');
         $fields = array_values(array_intersect(['productNumber', 'ean', 'manufacturerNumber'], $searchable ?? []));
         if ($fields === []) return [];
-        $criteria = (new Criteria())->setLimit(10000);
+        $criteria = (new Criteria())->setLimit(SearchService::MAX_CANDIDATES);
         $criteria->addFilter(new MultiFilter(MultiFilter::CONNECTION_OR, array_map(static fn (string $field) => new EqualsFilter($field, $query), $fields)));
         $criteria->addFilter(new ProductAvailableFilter($context->getSalesChannelId(), ProductVisibilityDefinition::VISIBILITY_SEARCH));
         if ($this->config->getBool('core.listing.hideCloseoutProductsWhenOutOfStock', $context->getSalesChannelId())) {

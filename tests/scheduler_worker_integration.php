@@ -1,4 +1,5 @@
 <?php declare(strict_types=1);
+require_once __DIR__.'/pending_revision.php';
 // Exercises the scheduler and a dedicated local queue with two temporary translated keywords.
 use Doctrine\DBAL\Connection;
 use ShopwareMeilisearch\Command\IndexCommand;
@@ -42,7 +43,7 @@ $deToken='zq'.strtr(bin2hex(random_bytes(12)),'0123456789abcdef','abcdefghijklmn
 if($search('de-DE',$deToken,$product['id'])||$search('en-GB',$enToken,$product['id']))throw new RuntimeException('Synthetic terms must be absent before the write.');
 $state=new DirtyState($db);$indexer=new Indexer($engine,$container->get('sales_channel.product.repository'),new DocumentBuilder(),new ParentTranslations($container->get('product.repository')),$config,$root.'/var/shopware-meilisearch');
 $command=new IndexCommand($indexer,$container->get(CachedSalesChannelContextFactory::class),$db,$config);
-$handler=new ReindexTaskHandler($container->get('scheduled_task.repository'),new NullLogger(),$command,$state);
+$handler=new ReindexTaskHandler($container->get('scheduled_task.repository'),new NullLogger(),$command,$state,$root.'/var/shopware-meilisearch');
 $repository=$container->get('product_translation.repository');$context=Context::createDefaultContext();$changed=false;
 $queue = 'el_search_probe_' . bin2hex(random_bytes(8));
 $taskRows = $db->fetchAllAssociative('SELECT LOWER(HEX(id)) id,status,next_execution_time,last_execution_time,updated_at FROM scheduled_task');
@@ -71,10 +72,10 @@ try {
   ['productId'=>$product['id'],'languageId'=>$domains['en-GB']['language'],'keywords'=>$enToken],
  ],$context);
  $after=(int)$db->fetchOne('SELECT revision FROM shopware_meilisearch_state WHERE id=1');
- if($after<=$before||$state->revisionToBuild()!==$after)throw new RuntimeException('Shopware translation write did not mark the index dirty.');
+ if($after<=$before||searchPendingRevisionForTest($db)!==$after)throw new RuntimeException('Shopware translation write did not mark the index dirty.');
  if($search('de-DE',$deToken,$product['id'])||$search('en-GB',$enToken,$product['id']))throw new RuntimeException('Unpublished terms unexpectedly appeared before the rebuild.');
  $runScheduler();
- if($state->revisionToBuild()!==null)throw new RuntimeException('The successful task did not complete its revision.');
+ if(searchPendingRevisionForTest($db)!==null)throw new RuntimeException('The successful task did not complete its revision.');
  if(!$search('de-DE',$deToken,$product['id'])||!$search('en-GB',$enToken,$product['id']))throw new RuntimeException('Updated language-local keywords were not searchable.');
  foreach($domains as $locale=>$_){
   if($locale!=='de-DE'&&$search($locale,$deToken,$product['id']))throw new RuntimeException('German test keyword crossed a language boundary.');
@@ -87,8 +88,8 @@ try {
    ['productId'=>$product['id'],'languageId'=>$domains['de-DE']['language'],'keywords'=>$product['de_keywords']],
    ['productId'=>$product['id'],'languageId'=>$domains['en-GB']['language'],'keywords'=>$product['en_keywords']],
   ],$context);
-  if($state->revisionToBuild()===null)$state->markDirty();
-  $handler->run();
+  if(searchPendingRevisionForTest($db)===null)$state->markDirty();$state->requestRebuild();
+  $state->requestRebuild();$handler->run();
   if($search('de-DE',$deToken,$product['id'])||$search('en-GB',$enToken,$product['id']))throw new RuntimeException('Restored test keywords were not reflected in the indexes.');
   echo "Original translated keywords and published indexes restored.\n";
  }

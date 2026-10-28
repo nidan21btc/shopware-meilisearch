@@ -1,13 +1,23 @@
 {
   "name": "shopware-meilisearch/local-search",
   "description": "Lokale Produktsuche mit Meilisearch und Vollbild-Overlay",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "shopware-platform-plugin",
   "license": "proprietary",
-  "require": { "shopware/core": "~6.7.0", "shopware/storefront": "~6.7.0" },
-  "autoload": { "psr-4": { "ShopwareMeilisearch\\": "src/" } },
+  "require": {
+    "shopware/core": "~6.7.0",
+    "shopware/storefront": "~6.7.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "ShopwareMeilisearch\\": "src/"
+    }
+  },
   "extra": {
     "shopware-plugin-class": "ShopwareMeilisearch\\ShopwareMeilisearch",
-    "label": { "de-DE": "Shopware lokale Suche", "en-GB": "Shopware local search" }
+    "label": {
+      "de-DE": "Shopware lokale Suche",
+      "en-GB": "Shopware local search"
+    }
   }
 }

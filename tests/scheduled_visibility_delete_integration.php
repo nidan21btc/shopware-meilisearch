@@ -1,4 +1,5 @@
 <?php declare(strict_types=1);
+require_once __DIR__.'/pending_revision.php';
 // Deletes and restores a visibility assignment in an isolated Shopware copy.
 use Doctrine\DBAL\Connection;
 use ShopwareMeilisearch\Command\IndexCommand;
@@ -48,20 +49,20 @@ foreach($candidates as $candidate){
 if($product===null)throw new RuntimeException('A product visible in all five test languages is required.');
 $state=new DirtyState($db);$indexer=new Indexer($engine,$container->get('sales_channel.product.repository'),new DocumentBuilder(),new ParentTranslations($container->get('product.repository')),$config,$root.'/var/shopware-meilisearch');
 $command=new IndexCommand($indexer,$container->get(CachedSalesChannelContextFactory::class),$db,$config);
-$handler=new ReindexTaskHandler($container->get('scheduled_task.repository'),new NullLogger(),$command,$state);
+$handler=new ReindexTaskHandler($container->get('scheduled_task.repository'),new NullLogger(),$command,$state,$root.'/var/shopware-meilisearch');
 $repository=$container->get('product_visibility.repository');$context=Context::createDefaultContext();$deleted=false;
 try {
  $before=(int)$db->fetchOne('SELECT revision FROM shopware_meilisearch_state WHERE id=1');
  $deleted=true;$repository->delete([['id'=>$product['visibility_id']]],$context);
  $after=(int)$db->fetchOne('SELECT revision FROM shopware_meilisearch_state WHERE id=1');
- if($after<=$before||$state->revisionToBuild()!==$after)throw new RuntimeException('Deleting product visibility did not mark the index dirty.');
+ if($after<=$before||searchPendingRevisionForTest($db)!==$after)throw new RuntimeException('Deleting product visibility did not mark the index dirty.');
  foreach($domains as $locale=>$domain){
   $index=Engine::indexName($channel,$domain['language']);
   if($engine->request('GET','/indexes/'.$index.'/documents/'.$product['id'],allowMissing:true)===null)throw new RuntimeException('Test requires a still-published stale index entry.');
   if($search($locale,$product['number'],$product['id']))throw new RuntimeException('The storefront showed a product after visibility was removed.');
  }
- $handler->run();
- if($state->revisionToBuild()!==null)throw new RuntimeException('The successful task did not complete its revision.');
+ $state->requestRebuild();$handler->run();
+ if(searchPendingRevisionForTest($db)!==null)throw new RuntimeException('The successful task did not complete its revision.');
  foreach($domains as $locale=>$domain){
   $index=Engine::indexName($channel,$domain['language']);
   if($engine->request('GET','/indexes/'.$index.'/documents/'.$product['id'],allowMissing:true)!==null)throw new RuntimeException('Deleted visibility remained indexed in '.$locale);
@@ -71,8 +72,8 @@ try {
  if($deleted){
   $exists=(int)$db->fetchOne('SELECT COUNT(*) FROM product_visibility WHERE id=UNHEX(:id)',['id'=>$product['visibility_id']]);
   if(!$exists)$repository->create([['id'=>$product['visibility_id'],'productId'=>$product['id'],'salesChannelId'=>$channel,'visibility'=>(int)$product['visibility']]],$context);
-  if($state->revisionToBuild()===null)$state->markDirty();
-  $handler->run();
+  if(searchPendingRevisionForTest($db)===null)$state->markDirty();$state->requestRebuild();
+  $state->requestRebuild();$handler->run();
   foreach($domains as $locale=>$domain){
    $index=Engine::indexName($channel,$domain['language']);
    if($engine->request('GET','/indexes/'.$index.'/documents/'.$product['id'],allowMissing:true)===null||!$search($locale,$product['number'],$product['id']))throw new RuntimeException('Restored visibility did not return in '.$locale);

@@ -2,6 +2,7 @@
 <config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/shopware/shopware/trunk/src/Core/System/SystemConfig/Schema/config.xsd">
     <card>
         <title>Lokale Suche</title>
+        <component name="sw-meilisearch-reindex"><name>reindexControl</name></component>
         <input-field type="bool">
             <name>enabled</name>
             <label>Suchoverlay aktivieren</label>

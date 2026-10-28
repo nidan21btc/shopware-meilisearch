@@ -136,7 +136,8 @@ final class DocumentBuilder
                 'disableOnAttributes' => array_values(array_intersect(['productNumber', 'ean', 'manufacturerNumber', 'quantity', 'nameHyphenAliases'], $searchable)),
             ],
             'synonyms' => (object) $synonyms,
-            'pagination' => ['maxTotalHits' => 10000],
+            'searchCutoffMs' => 250,
+            'pagination' => ['maxTotalHits' => SearchService::MAX_CANDIDATES],
             'faceting' => ['maxValuesPerFacet' => 100],
         ];
     }

@@ -108,6 +108,7 @@ if (dialog && typeof dialog.showModal === 'function') {
             });
             if (!response.ok && response.status !== 503) throw new Error('Search unavailable');
             const html = await response.text();
+            if (!html.trim()) throw new Error('Search unavailable');
             if (current !== revision || !dialog.open) return;
             // Filters are rebuilt from Shopware's current counts. Save their
             // interaction state immediately before replacement so a customer
@@ -335,7 +336,7 @@ if (dialog && typeof dialog.showModal === 'function') {
         controller?.abort();
         ++revision;
         clearTimeout(timer);
-        timer = setTimeout(() => load(1, true), 180);
+        timer = setTimeout(() => load(1, true), 300);
     });
     dialog.addEventListener('click', (event) => {
         if (event.target === dialog) {

@@ -14,7 +14,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 #[AsCommand(name: 'shopware-meilisearch:search:import-signals', description: 'Import reviewed, language-specific local search signals from JSON files.')]
 final class ImportSignalsCommand extends Command
 {
-    public function __construct(private readonly SystemConfigService $config, private readonly string $signalKey = '')
+    public function __construct(private readonly SystemConfigService $config, private readonly string|\ShopwareMeilisearch\Security\Secret $signalKey = '')
     {
         parent::__construct();
     }
@@ -58,10 +58,10 @@ final class ImportSignalsCommand extends Command
                 throw new \RuntimeException('Cannot read signal file.');
             }
             if ($kind === 'queryClicks') {
-                QueryClickFeedback::parse($json, $this->signalKey);
+                QueryClickFeedback::parse($json, (string) $this->signalKey);
                 if ($input->getOption('merge-query-clicks')) {
                     $existing = $this->config->getString('ShopwareMeilisearch.config.queryClickFeedback', $channel);
-                    $json = QueryClickFeedback::merge($existing, $json, $this->signalKey);
+                    $json = QueryClickFeedback::merge($existing, $json, (string) $this->signalKey);
                 }
             }
             else FeedbackConfig::parse($json, $kind);

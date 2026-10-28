@@ -1,4 +1,5 @@
 <?php declare(strict_types=1);
+require_once __DIR__.'/pending_revision.php';
 // Exercises Shopware's actual scheduled-task failure/retry in a disposable copy.
 use Doctrine\DBAL\Connection;
 use ShopwareMeilisearch\Command\IndexCommand;
@@ -33,19 +34,19 @@ $snapshot=static function() use($goodEngine,$index):array {$meta=$goodEngine->re
 $make=static function(Engine $engine) use($container,$db,$config,$root,$state):ReindexTaskHandler {
  $indexer=new Indexer($engine,$container->get('sales_channel.product.repository'),new DocumentBuilder(),new ParentTranslations($container->get('product.repository')),$config,$root.'/var/shopware-meilisearch');
  $command=new IndexCommand($indexer,$container->get(CachedSalesChannelContextFactory::class),$db,$config);
- return new ReindexTaskHandler($container->get('scheduled_task.repository'),new NullLogger(),$command,$state);
+ return new ReindexTaskHandler($container->get('scheduled_task.repository'),new NullLogger(),$command,$state,$root.'/var/shopware-meilisearch');
 };
 $queue=static function() use($container,$taskRow):void {$container->get('scheduled_task.repository')->update([['id'=>$taskRow['id'],'status'=>'queued']],Shopware\Core\Framework\Context::createCLIContext());};
 $task=new ReindexTask();$task->setTaskId($taskRow['id']);$before=$snapshot();
 try {
- $state->markDirty();$pending=$state->revisionToBuild();$queue();
+ $state->markDirty();$state->requestRebuild();$pending=searchPendingRevisionForTest($db);$queue();
  $badEngine=new Engine($http,'http://127.0.0.1:1',$apiKey);($make($badEngine))($task);
  $status=$db->fetchOne('SELECT status FROM scheduled_task WHERE id=UNHEX(:id)',['id'=>$taskRow['id']]);
- if($status!=='scheduled'||$state->revisionToBuild()!==$pending||$snapshot()!==$before)throw new RuntimeException('Failed task did not preserve its schedule, pending state or published index.');
+ if($status!=='scheduled'||searchPendingRevisionForTest($db)!==$pending||$snapshot()!==$before)throw new RuntimeException('Failed task did not preserve its schedule, pending state or published index.');
  echo "Unavailable service: task rescheduled and published index preserved.\n";
- $queue();($make($goodEngine))($task);
+ $db->executeStatement('UPDATE shopware_meilisearch_state SET attempted_at=DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 16 MINUTE) WHERE id=1');$queue();($make($goodEngine))($task);
  $status=$db->fetchOne('SELECT status FROM scheduled_task WHERE id=UNHEX(:id)',['id'=>$taskRow['id']]);$after=$snapshot();
- if($status!=='scheduled'||$state->revisionToBuild()!==null||$after['count']!==$before['count']||$after['ids']!==$before['ids'])throw new RuntimeException('Retry did not complete and preserve expected search results.');
+ if($status!=='scheduled'||searchPendingRevisionForTest($db)!==null||$after['count']!==$before['count']||$after['ids']!==$before['ids'])throw new RuntimeException('Retry did not complete and preserve expected search results.');
  echo "Retry completed and the task was rescheduled.\n";
 } finally {
  $db->executeStatement('UPDATE scheduled_task SET status=:status,last_execution_time=:last,next_execution_time=:next,updated_at=:updated WHERE id=UNHEX(:id)',

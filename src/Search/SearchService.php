@@ -20,6 +20,7 @@ use Shopware\Core\System\SystemConfig\SystemConfigService;
 
 final class SearchService
 {
+    public const MAX_CANDIDATES = 5000;
     public function __construct(
         private readonly Engine $engine,
         private readonly SalesChannelRepository $products,
@@ -31,7 +32,7 @@ final class SearchService
         private readonly IdentifierFallback $identifierFallback,
         private readonly ReferenceUnitLabels $referenceUnitLabels,
         private readonly SystemConfigService $config,
-        private readonly string $signalKey,
+        private readonly string|\ShopwareMeilisearch\Security\Secret $signalKey,
         private readonly LoggerInterface $logger,
     ) {
     }
@@ -69,7 +70,7 @@ final class SearchService
         $response = $this->engine->request('POST', '/indexes/' . $index . '/search', [
             'q' => $input->query,
             'page' => 1,
-            'hitsPerPage' => 10000,
+            'hitsPerPage' => self::MAX_CANDIDATES,
             'attributesToRetrieve' => ['id', 'unnamed', 'quantityKey'],
             'showRankingScoreDetails' => $needsTypoDetails,
             // Keep rare distinguishing terms if a multi-word query has no
@@ -116,9 +117,9 @@ final class SearchService
                 $this->logger->warning('Local exact identifier lookup was skipped', ['exceptionClass' => $error::class]);
             }
         }
-        $extraTruncated = count($candidates) > 10000;
+        $extraTruncated = count($candidates) > self::MAX_CANDIDATES;
         if ($extraTruncated) {
-            $candidates = array_slice($candidates, 0, 10000);
+            $candidates = array_slice($candidates, 0, self::MAX_CANDIDATES);
             $unnamed = array_intersect_key($unnamed, array_fill_keys($candidates, true));
         }
         $primaryIds = array_fill_keys($candidates, true);
@@ -155,7 +156,7 @@ final class SearchService
         }
         if ($terms !== []) {
             $queries = array_map(static fn (string $term): array => [
-                'indexUid' => $index, 'q' => $term, 'limit' => 10000,
+                'indexUid' => $index, 'q' => $term, 'limit' => self::MAX_CANDIDATES,
                 'attributesToRetrieve' => ['id', 'unnamed'], 'matchingStrategy' => $quantityExpansion ? 'all' : 'frequency',
             ], $terms);
             try {
@@ -164,10 +165,10 @@ final class SearchService
                 // Filter before selecting each term's first page: otherwise
                 // twenty matches in another manufacturer can hide the first
                 // matching product in the customer's selected manufacturer.
-                $wide = PartialMatches::append([], $lists, 10000);
-                $extraTruncated = $extraTruncated || count($wide) > 10000
-                    || array_filter($lists, static fn (array $hits): bool => count($hits) >= 10000) !== [];
-                $addedIds = array_slice(array_values(array_diff($wide, $candidates)), 0, 10000);
+                $wide = PartialMatches::append([], $lists, self::MAX_CANDIDATES);
+                $extraTruncated = $extraTruncated || count($wide) > self::MAX_CANDIDATES
+                    || array_filter($lists, static fn (array $hits): bool => count($hits) >= self::MAX_CANDIDATES) !== [];
+                $addedIds = array_slice(array_values(array_diff($wide, $candidates)), 0, self::MAX_CANDIDATES);
                 $flagged = [];
                 foreach ($lists as $list) foreach ($list as $hit) {
                     if (($hit['unnamed'] ?? false) === true && isset($hit['id']) && is_string($hit['id']) && preg_match('/^[a-f0-9]{32}$/D', $hit['id'])) $flagged[] = $hit['id'];
@@ -182,19 +183,19 @@ final class SearchService
                 do {
                     $extended = PartialMatches::append($candidates, $filteredLists, $perTerm);
                     if (count($extended) - count($candidates) >= count($eligible)
-                        || count($extended) >= 10000 || $perTerm >= 10000
+                        || count($extended) >= self::MAX_CANDIDATES || $perTerm >= self::MAX_CANDIDATES
                         || !$this->needsPartialExpansion($extended, $primaryIds, $input, $context)) break;
                     // Parent/variant pairs can reduce twenty eligible hits to
                     // fewer cards; look further only while the page is sparse.
-                    $perTerm = min(10000, $perTerm * 2);
+                    $perTerm = min(self::MAX_CANDIDATES, $perTerm * 2);
                 } while (true);
                 // Keep the previous unfiltered sample for facets that ignore
                 // their own selection, including choices outside this filter.
                 $samples = array_map(static fn (array $hits): array => array_values(array_filter(array_slice($hits, 0, SearchInput::PAGE_SIZE),
                     static fn (array $hit): bool => isset($hit['id']) && isset($extraAllowed[$hit['id']]))), $lists);
                 $extended = PartialMatches::append($extended, $samples);
-                $additional = array_slice($extended, count($candidates), max(0, 10000 - count($candidates)));
-                if (count($extended) > 10000) $extraTruncated = true;
+                $additional = array_slice($extended, count($candidates), max(0, self::MAX_CANDIDATES - count($candidates)));
+                if (count($extended) > self::MAX_CANDIDATES) $extraTruncated = true;
                 $unnamed += array_intersect_key($extraUnnamed, array_fill_keys($additional, true));
                 $broadened = $additional !== [];
                 $candidates = array_merge($candidates, $additional);
@@ -218,7 +219,7 @@ final class SearchService
         // card. Keep a parent when no visible variant matched (e.g. an exact
         // parent article number), rather than hiding it unconditionally.
         $families = new Criteria($candidates);
-        $families->setLimit(10000)->addFields(['id', 'parentId']);
+        $families->setLimit(self::MAX_CANDIDATES)->addFields(['id', 'parentId']);
         $this->applyAvailability($families, $context);
         $familyMap = [];
         foreach ($this->products->search($families, $context)->getEntities() as $product) {
@@ -242,7 +243,7 @@ final class SearchService
         $eligibleSet = null;
         if ($hasFilters) {
             $eligibleCriteria = new Criteria($candidates);
-            $eligibleCriteria->setLimit(10000);
+            $eligibleCriteria->setLimit(self::MAX_CANDIDATES);
             $this->applyAvailability($eligibleCriteria, $context);
             $this->applyFilters($eligibleCriteria, $input);
             $eligibleIds = $this->products->searchIds($eligibleCriteria, $context)->getIds();
@@ -254,7 +255,7 @@ final class SearchService
         $hasSimilar = false;
         if ($preciseIds !== null) {
             $preciseCriteria = new Criteria($preciseIds);
-            $preciseCriteria->setLimit(10000);
+            $preciseCriteria->setLimit(self::MAX_CANDIDATES);
             $this->applyAvailability($preciseCriteria, $context);
             $this->applyFilters($preciseCriteria, $input);
             $eligible = $this->products->searchIds($preciseCriteria, $context)->getIds();
@@ -296,7 +297,7 @@ final class SearchService
         $criteria = new Criteria($candidates);
         $this->applyAvailability($criteria, $context);
         $this->applyFilters($criteria, $input);
-        $criteria->setLimit(10000);
+        $criteria->setLimit(self::MAX_CANDIDATES);
         $visibleIds = $this->products->searchIds($criteria, $context)->getIds();
         if ($hasPriceFilter) $visibleIds = self::filterByDisplayedPrice($visibleIds, $displayedPrices ?? [], $input);
         if ($input->sort === 'relevance') {
@@ -306,8 +307,8 @@ final class SearchService
             if ($input->query !== '' && trim($feedbackJson) !== '') {
                 try {
                     $locale = $context->getLanguageInfo()->localeCode;
-                    $fingerprint = QueryClickFeedback::fingerprint($locale, $feedbackQuery ?? $input->query, $this->signalKey);
-                    $feedback = QueryClickFeedback::parse($feedbackJson, $this->signalKey);
+                    $fingerprint = QueryClickFeedback::fingerprint($locale, $feedbackQuery ?? $input->query, (string) $this->signalKey);
+                    $feedback = QueryClickFeedback::parse($feedbackJson, (string) $this->signalKey);
                     // Feedback is restricted to products from the language index.
                     $weights = array_diff_key($feedback[$locale][$fingerprint] ?? [], array_diff_key($directUnnamed, array_fill_keys($indexedUnnamedIds, true)));
                     // A click signal must not promote a different quantity
@@ -409,7 +410,7 @@ final class SearchService
             'categories' => $categoryFacets,
             'total' => $total, 'page' => $page, 'pages' => $pages,
             'priceRange' => $rangePrices !== [] ? ['min' => min($rangePrices), 'max' => max($rangePrices)] : null,
-            'truncated' => $extraTruncated || ($response['totalHits'] ?? 0) >= 10000,
+            'truncated' => $extraTruncated || ($response['totalHits'] ?? 0) >= self::MAX_CANDIDATES,
             'featured' => $featured !== [],
             'broadened' => $quantityExpansion ? $visibleQuantityFallback : $broadened,
             'quantityFallback' => $visibleQuantityFallback,
@@ -519,7 +520,7 @@ final class SearchService
 
     private function needsPartialExpansion(array $ids, array $primaryIds, SearchInput $input, SalesChannelContext $context): bool
     {
-        $criteria = (new Criteria($ids))->setLimit(10000)->addFields(['id', 'parentId']);
+        $criteria = (new Criteria($ids))->setLimit(self::MAX_CANDIDATES)->addFields(['id', 'parentId']);
         $this->applyAvailability($criteria, $context);
         $this->applyFilters($criteria, $input);
         $eligible = [];
@@ -572,7 +573,7 @@ final class SearchService
         $selected = $facet === 'manufacturer' ? $input->manufacturers : $input->categories;
         $eligible = [];
         if ($candidates !== []) {
-            $criteria = (new Criteria($candidates))->setLimit(10000);
+            $criteria = (new Criteria($candidates))->setLimit(self::MAX_CANDIDATES);
             $this->applyAvailability($criteria, $context);
             $this->applyFilters($criteria, $other);
             $eligible = $this->products->searchIds($criteria, $context)->getIds();
@@ -587,7 +588,7 @@ final class SearchService
             $this->applyAvailability($criteria, $context);
             // The catalog can have more than 100 categories. Truncating a
             // bucket list also makes precise/full facet counts incomparable.
-            $criteria->addAggregation(new TermsAggregation($facet, $field, 10000));
+            $criteria->addAggregation(new TermsAggregation($facet, $field, self::MAX_CANDIDATES));
             $result = $this->products->aggregate($criteria, $context)->get($facet);
             return $result instanceof TermsResult ? $result : null;
         };

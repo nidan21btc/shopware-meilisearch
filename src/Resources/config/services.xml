@@ -4,10 +4,29 @@
         <parameter key="env(SHOPWARE_MEILISEARCH_URL)">http://127.0.0.1:7700</parameter>
         <parameter key="env(SHOPWARE_MEILISEARCH_KEY)"></parameter>
         <parameter key="env(SHOPWARE_MEILISEARCH_SOCKET)"></parameter>
+        <parameter key="env(SHOPWARE_MEILISEARCH_KEY_FILE)"></parameter>
+        <parameter key="env(SHOPWARE_MEILISEARCH_SEARCH_KEY)"></parameter>
+        <parameter key="env(SHOPWARE_MEILISEARCH_SEARCH_KEY_FILE)"></parameter>
+        <parameter key="env(SHOPWARE_MEILISEARCH_FEEDBACK_KEY)"></parameter>
+        <parameter key="env(SHOPWARE_MEILISEARCH_FEEDBACK_KEY_FILE)"></parameter>
+        <parameter key="env(SHOPWARE_MEILISEARCH_STATUS_KEY)"></parameter>
+        <parameter key="env(SHOPWARE_MEILISEARCH_STATUS_KEY_FILE)"></parameter>
+        <parameter key="env(SHOPWARE_MEILISEARCH_CONCURRENCY)">2</parameter>
+        <parameter key="env(SHOPWARE_MEILISEARCH_GLOBAL_RATE)">2</parameter>
+        <parameter key="env(SHOPWARE_MEILISEARCH_CLIENT_RATE)">2</parameter>
     </parameters>
     <services>
+        <service id="shopware_meilisearch.status_secret" class="ShopwareMeilisearch\Security\Secret"><argument>%env(string:SHOPWARE_MEILISEARCH_STATUS_KEY)%</argument><argument>%env(string:SHOPWARE_MEILISEARCH_STATUS_KEY_FILE)%</argument></service>
+        <service id="shopware_meilisearch.write_secret" class="ShopwareMeilisearch\Security\Secret"><argument>%env(string:SHOPWARE_MEILISEARCH_KEY)%</argument><argument>%env(string:SHOPWARE_MEILISEARCH_KEY_FILE)%</argument></service>
+        <service id="shopware_meilisearch.search_secret" class="ShopwareMeilisearch\Security\Secret"><argument>%env(string:SHOPWARE_MEILISEARCH_SEARCH_KEY)%</argument><argument>%env(string:SHOPWARE_MEILISEARCH_SEARCH_KEY_FILE)%</argument></service>
+        <service id="shopware_meilisearch.feedback_secret" class="ShopwareMeilisearch\Security\Secret"><argument>%env(string:SHOPWARE_MEILISEARCH_FEEDBACK_KEY)%</argument><argument>%env(string:SHOPWARE_MEILISEARCH_FEEDBACK_KEY_FILE)%</argument></service>
+        <service id="ShopwareMeilisearch\Security\SearchRequestGuard"><argument>%kernel.project_dir%/var/shopware-meilisearch/admission</argument><argument>%env(int:SHOPWARE_MEILISEARCH_CONCURRENCY)%</argument><argument>%env(int:SHOPWARE_MEILISEARCH_GLOBAL_RATE)%</argument><argument>%env(int:SHOPWARE_MEILISEARCH_CLIENT_RATE)%</argument><tag name="kernel.event_subscriber"/></service>
+        <service id="ShopwareMeilisearch\Controller\ReindexController" public="true"><argument type="service" id="ShopwareMeilisearch\Search\DirtyState"/><tag name="controller.service_arguments"/></service>
+        <service id="shopware_meilisearch.read_engine" class="ShopwareMeilisearch\Search\Engine">
+            <argument type="service" id="http_client"/><argument>%env(string:SHOPWARE_MEILISEARCH_URL)%</argument><argument type="service" id="shopware_meilisearch.search_secret"/><argument>%env(string:SHOPWARE_MEILISEARCH_SOCKET)%</argument>
+        </service>
         <service id="ShopwareMeilisearch\Search\SearchService">
-            <argument type="service" id="ShopwareMeilisearch\Search\Engine"/>
+            <argument type="service" id="shopware_meilisearch.read_engine"/>
             <argument type="service" id="sales_channel.product.repository"/>
             <argument type="service" id="product_manufacturer.repository"/>
             <argument type="service" id="category.repository"/>
@@ -17,21 +36,23 @@
             <argument type="service" id="ShopwareMeilisearch\Search\IdentifierFallback"/>
             <argument type="service" id="ShopwareMeilisearch\Search\ReferenceUnitLabels"/>
             <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
-            <argument>%env(string:SHOPWARE_MEILISEARCH_KEY)%</argument>
+            <argument type="service" id="shopware_meilisearch.feedback_secret"/>
             <argument type="service" id="logger"/>
         </service>
         <service id="ShopwareMeilisearch\Controller\SearchController" public="true">
             <argument type="service" id="ShopwareMeilisearch\Search\SearchService"/>
             <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
             <argument type="service" id="logger"/>
+            <argument type="service" id="ShopwareMeilisearch\Security\SearchRequestGuard"/>
             <call method="setContainer"><argument type="service" id="service_container"/></call>
             <tag name="controller.service_arguments"/>
         </service>
         <service id="ShopwareMeilisearch\Search\Engine">
             <argument type="service" id="http_client"/>
             <argument>%env(string:SHOPWARE_MEILISEARCH_URL)%</argument>
-            <argument>%env(string:SHOPWARE_MEILISEARCH_KEY)%</argument>
+            <argument type="service" id="shopware_meilisearch.write_secret"/>
             <argument>%env(string:SHOPWARE_MEILISEARCH_SOCKET)%</argument>
+            <argument type="service" id="shopware_meilisearch.status_secret"/>
         </service>
         <service id="ShopwareMeilisearch\Search\DocumentBuilder"/>
         <service id="ShopwareMeilisearch\Search\DirtyState">
@@ -53,7 +74,7 @@
             <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
         </service>
         <service id="ShopwareMeilisearch\Search\IdentifierFallback">
-            <argument type="service" id="ShopwareMeilisearch\Search\Engine"/>
+            <argument type="service" id="shopware_meilisearch.read_engine"/>
             <argument type="service" id="sales_channel.product.repository"/>
             <argument type="service" id="ShopwareMeilisearch\Search\ParentTranslations"/>
             <argument type="service" id="Shopware\Core\Content\Product\SalesChannel\ProductCloseoutFilterFactory"/>
@@ -76,7 +97,7 @@
         </service>
         <service id="ShopwareMeilisearch\Command\ImportSignalsCommand">
             <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
-            <argument>%env(string:SHOPWARE_MEILISEARCH_KEY)%</argument>
+            <argument type="service" id="shopware_meilisearch.feedback_secret"/>
             <tag name="console.command"/>
         </service>
         <service id="ShopwareMeilisearch\Command\AuditIndexFieldsCommand">
@@ -114,6 +135,7 @@
             <argument type="service" id="logger"/>
             <argument type="service" id="ShopwareMeilisearch\Command\IndexCommand"/>
             <argument type="service" id="ShopwareMeilisearch\Search\DirtyState"/>
+            <argument>%kernel.project_dir%/var/shopware-meilisearch</argument>
             <tag name="messenger.message_handler"/>
         </service>
     </services>
