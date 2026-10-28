@@ -210,7 +210,7 @@ Start with this minimal configuration:
 | Quantity units | Leave blank initially, or configure the actual unit UUID/factor if quantity search is required |
 | Synonyms | Optional; configure per locale after a basic working search |
 | Suggestions and featured products | Optional; no merchant products/suggestions are built in |
-| Popularity/historical hints/keyed feedback | Optional; leave blank for an independent first installation |
+| Popularity/keyed feedback | Optional; leave blank for an independent first installation |
 
 Save changes before indexing. A blank optional field is not a request to supply
 sample merchant data. Consult [configuration](configuration.md) for exact JSON

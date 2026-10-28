@@ -45,11 +45,6 @@
             <helpText>Optional: {"de-DE": {"PRODUKT_UUID": 12}, "en-GB": {"PRODUKT_UUID": 5}}. Sprachgetrennte Sortierhilfe nach Worttreffern und Tippfehlern. Nach Änderungen Index neu aufbauen.</helpText>
         </input-field>
         <input-field type="textarea">
-            <name>queryHints</name>
-            <label>Historische Suchbegriffe je Produkt und Sprache als JSON</label>
-            <helpText>Optional: {"de-DE": {"PRODUKT_UUID": ["Suchbegriff"]}}. Diese Begriffe werden zusätzlich im lokalen Index gespeichert und müssen bewusst bereitgestellt werden. Keine automatische Erfassung. Nach Änderungen Index neu aufbauen.</helpText>
-        </input-field>
-        <input-field type="textarea">
             <name>queryClickFeedback</name>
             <label>Optionale Klicksignale für genaue Suchanfragen als JSON</label>
             <helpText>Nur lokal erzeugte, geprüfte Signale importieren. Die Anfrage wird als Schlüsselwert statt im Klartext gespeichert. Nach Änderung des separaten Feedback-Schlüssels müssen die Signale neu erzeugt werden.</helpText>

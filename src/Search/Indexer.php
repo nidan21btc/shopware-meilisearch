@@ -57,9 +57,6 @@ final class Indexer
         $weightsJson = $this->config->getString('ShopwareMeilisearch.config.popularityWeights', $context->getSalesChannelId());
         $weightsByLanguage = FeedbackConfig::parse($weightsJson, 'popularity');
         $weights = $weightsByLanguage[$context->getLanguageInfo()->localeCode] ?? [];
-        $hintsJson = $this->config->getString('ShopwareMeilisearch.config.queryHints', $context->getSalesChannelId());
-        $hintsByLanguage = FeedbackConfig::parse($hintsJson, 'hints');
-        $hints = $hintsByLanguage[$context->getLanguageInfo()->localeCode] ?? [];
         $json = $this->config->getString('ShopwareMeilisearch.config.synonyms', $context->getSalesChannelId());
         $byLanguage = $json === '' ? [] : json_decode($json, true, 32, JSON_THROW_ON_ERROR);
         if (!is_array($byLanguage)) {
@@ -81,7 +78,7 @@ final class Indexer
             $this->engine->mutate('DELETE', '/indexes/' . $temporary);
         }
         $this->engine->mutate('POST', '/indexes', ['uid' => $temporary, 'primaryKey' => 'id']);
-        $this->engine->mutate('PATCH', '/indexes/' . $temporary . '/settings', DocumentBuilder::settings($synonyms, $fields, $context->getLanguageInfo()->localeCode, $hints !== []));
+        $this->engine->mutate('PATCH', '/indexes/' . $temporary . '/settings', DocumentBuilder::settings($synonyms, $fields, $context->getLanguageInfo()->localeCode));
 
         $offset = 0;
         $indexed = 0;
@@ -96,7 +93,7 @@ final class Indexer
             $this->parents->load($products->getEntities(), $context);
             $documents = [];
             foreach ($products->getEntities() as $product) {
-                $document = $this->builder->build($product, $context->getLanguageId(), $fields, $weights[$product->getId()] ?? 0, $hints[$product->getId()] ?? [], $quantityUnits);
+                $document = $this->builder->build($product, $context->getLanguageId(), $fields, $weights[$product->getId()] ?? 0, $quantityUnits);
                 if ($document !== null) {
                     $documents[] = $document;
                 }

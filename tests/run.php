@@ -184,7 +184,6 @@ check((new DocumentBuilder())->build($product, str_repeat('9', 32), ['name', 'ca
 $unnamedTranslation->setName('<style>hiddenname</style>');
 check((new DocumentBuilder())->build($product, str_repeat('9', 32), ['name', 'categories', 'productNumber']) === null, 'Invisible name markup cannot qualify a generic unnamed product');
 $unnamedTranslation->setName(null);
-check((new DocumentBuilder())->build($product, str_repeat('9', 32), ['name'], 0, ['local-hint'])['unnamed'] === true, 'Explicit local query hint can qualify unnamed document');
 $unnamedTranslation->setDescription('<p> </p>');
 check((new DocumentBuilder())->build($product, str_repeat('9', 32), ['description']) === null, 'Empty HTML does not qualify an unnamed product');
 $unnamedTranslation->setDescription('<style>red</style><script>foreignterm()</script>');
@@ -221,8 +220,6 @@ check($customDocument['customFields']['search_themes'] === 'Geborgenheit & Vertr
 check(!isset($customDocument['customFields']['internal_note']), 'Unselected custom fields excluded');
 check(!isset($customDocument['description'], $customDocument['keywords'], $customDocument['productNumber']), 'Unselected standard fields excluded');
 check(DocumentBuilder::settings([], $fields)['searchableAttributes'] === ['customFields.search_themes', 'name', 'nameHyphenAliases'], 'Configured priority and name-derived aliases are preserved');
-check(DocumentBuilder::settings([], $fields, 'de-DE', true)['searchableAttributes'] === ['customFields.search_themes', 'name', 'queryHints', 'nameHyphenAliases'], 'Opt-in hints keep configured field order');
-check(DocumentBuilder::settings([], ['name', 'description'], 'de-DE', true)['searchableAttributes'] === ['name', 'queryHints', 'nameHyphenAliases', 'description'], 'Query hints precede description without changing the chosen field order');
 check(NameAliases::hyphenCompounds('Blüten-Essenz und Rose‐Water') === ['BlütenEssenz', 'RoseWater'], 'Derive local alphabetic hyphen compounds');
 check(NameAliases::hyphenCompounds('Alpha-Beta-Gamma-Delta') === ['AlphaBeta', 'GammaDelta', 'AlphaBetaGammaDelta'], 'Keep pairwise aliases and join complete multi-hyphen names');
 check(NameAliases::hyphenCompounds('Alpha-Beta‐Gamma') === ['AlphaBeta', 'AlphaBetaGamma'], 'Join mixed Unicode hyphen compounds');
@@ -331,13 +328,13 @@ check(QuantityUnits::tokens($litreId, 0.01, QuantityUnits::parse('{}')) === [], 
 check(in_array('quantity', IndexFields::DEFAULTS, true), 'Default field selection includes physical quantity');
 $product->setUnitId($litreId);
 $product->setPurchaseUnit(0.01);
-$germanQuantity = (new DocumentBuilder())->build($product, $language, ['name', 'quantity'], 0, [], $quantityUnits);
-$englishQuantity = (new DocumentBuilder())->build($product, $channel, ['name', 'quantity'], 0, [], $quantityUnits);
+$germanQuantity = (new DocumentBuilder())->build($product, $language, ['name', 'quantity'], 0, $quantityUnits);
+$englishQuantity = (new DocumentBuilder())->build($product, $channel, ['name', 'quantity'], 0, $quantityUnits);
 check($germanQuantity['quantity'] === ['10 ml', '10ml', '0.01 l', '0.01l'] && $englishQuantity['quantity'] === ['10 ml', '10ml', '0.01 l', '0.01l'] && $germanQuantity['quantityKey'] === 'ml:10' && $englishQuantity['quantityKey'] === 'ml:10', 'Physical quantity is language neutral without translated text');
-check(!isset((new DocumentBuilder())->build($product, $language, ['name'], 0, [], $quantityUnits)['quantityKey']), 'Unselected quantity key is not indexed');
-check(!isset((new DocumentBuilder())->build($product, $language, ['name'], 0, [], $quantityUnits)['quantity']), 'Unselected quantity is not indexed');
+check(!isset((new DocumentBuilder())->build($product, $language, ['name'], 0, $quantityUnits)['quantityKey']), 'Unselected quantity key is not indexed');
+check(!isset((new DocumentBuilder())->build($product, $language, ['name'], 0, $quantityUnits)['quantity']), 'Unselected quantity is not indexed');
 $product->setPurchaseUnit(0.001000000004);
-$roundedQuantity = (new DocumentBuilder())->build($product, $language, ['name', 'quantity'], 0, [], $quantityUnits);
+$roundedQuantity = (new DocumentBuilder())->build($product, $language, ['name', 'quantity'], 0, $quantityUnits);
 check($roundedQuantity['quantity'] === [] && !isset($roundedQuantity['quantityKey']), 'A materially rounded size cannot enter a product document or affect relevance');
 $product->setUnitId(null);
 $product->setPurchaseUnit(null);
@@ -402,7 +399,6 @@ check(SearchService::matchedParents(['child' => 'parent'], ['parent' => true], [
 $priceInput = new SearchInput('', 1, 'relevance', [], [], 10.0, 15.0, false);
 check(SearchService::filterByDisplayedPrice(['one', 'two', 'three', 'missing'], ['one' => 10.0, 'two' => 15.0, 'three' => 15.01], $priceInput) === ['one', 'two'], 'Filter by the actual displayed price and include the bounds');
 check(FeedbackConfig::parse('{"de-DE":{"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa":5}}', 'popularity')['de-DE'][$channel] === 5, 'Parse per-language popularity');
-check(FeedbackConfig::parse('{"de-DE":{"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa":["ruhe"]}}', 'hints')['de-DE'][$channel] === ['ruhe'], 'Parse per-language query hints');
 $digest = QueryClickFeedback::fingerprint('de-DE', "  BLA\u{0308}TTER\tTest ", 'local-test-key');
 check($digest === '10093bd0c0686b5e3b7ba4619354bf8be861c5614059710f2127e2283406d0f8', 'PHP and local generator use the same normalized keyed query fingerprint');
 check($digest !== QueryClickFeedback::fingerprint('en-GB', "  BLA\u{0308}TTER\tTest ", 'local-test-key'), 'Query feedback cannot cross language scopes');
@@ -428,17 +424,7 @@ try {
     QueryClickFeedback::merge($fullFeedback, $extraFeedback, 'local-test-key');
     throw new RuntimeException('Oversized feedback merge accepted');
 } catch (InvalidArgumentException) { ++$checks; }
-$existingHints = json_encode(['de-DE' => [$channel => ['ruhe', 'kraft'], $language => ['blüte']], 'en-GB' => [$channel => ['calm']]], JSON_THROW_ON_ERROR);
-$newHints = json_encode(['de-DE' => [$channel => ['ruhe', 'gelassen'], $three => ['sonne']], 'fr-FR' => [$channel => ['calme']]], JSON_THROW_ON_ERROR);
-$mergedHints = FeedbackConfig::parse(FeedbackConfig::mergeHints($existingHints, $newHints), 'hints');
-check($mergedHints['de-DE'][$channel] === ['ruhe', 'kraft', 'gelassen'] && $mergedHints['de-DE'][$language] === ['blüte'] && $mergedHints['de-DE'][$three] === ['sonne'], 'Merge hints per product without removing or duplicating existing entries');
-check($mergedHints['en-GB'][$channel] === ['calm'] && $mergedHints['fr-FR'][$channel] === ['calme'] && !isset($mergedHints['en-GB'][$three]), 'Merge hints without crossing languages');
-try {
-    $fullHints = json_encode(['de-DE' => [$channel => array_map(static fn (int $n): string => 'term' . $n, range(1, 50))]], JSON_THROW_ON_ERROR);
-    FeedbackConfig::mergeHints($fullHints, json_encode(['de-DE' => [$channel => ['extra']]], JSON_THROW_ON_ERROR));
-    throw new RuntimeException('Oversized hint merge was accepted');
-} catch (InvalidArgumentException) { ++$checks; }
-foreach ([['{"de-DE":{"bad":2}}','popularity'], ['{"de-DE":{"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa":-1}}','popularity'], ['{"de-DE":{"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa":[42]}}','hints'], ['["invalid"]','hints']] as [$badJson, $kind]) {
+foreach ([['{"de-DE":{"bad":2}}','popularity'], ['{"de-DE":{"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa":-1}}','popularity'], ['["invalid"]','popularity']] as [$badJson, $kind]) {
     try {
         FeedbackConfig::parse($badJson, $kind);
         throw new RuntimeException('Invalid feedback accepted');

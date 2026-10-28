@@ -45,9 +45,8 @@ matches. `IdentifierFallback` supplements exact identifier matches through
 Shopware when necessary. `SearchService` applies these rules and current
 Shopware eligibility rather than returning the engine's response directly.
 
-Optional reviewed `queryHints` enter the index in the configured language.
 Keyed query/click feedback is applied by the application for exact normalized
-queries. Neither is collected automatically. Historical clicks are a ranking
+queries. It is not collected automatically. Historical clicks are a ranking
 signal, not independent ground truth; see [evaluation](evaluation.md).
 
 At most 5,000 candidate IDs are processed per search, including supplemental

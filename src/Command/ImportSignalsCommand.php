@@ -22,10 +22,8 @@ final class ImportSignalsCommand extends Command
     protected function configure(): void
     {
         $this->addOption('popularity', null, InputOption::VALUE_REQUIRED, 'JSON file with per-product counts');
-        $this->addOption('query-hints', null, InputOption::VALUE_REQUIRED, 'Reviewed JSON file with per-product search terms');
         $this->addOption('query-clicks', null, InputOption::VALUE_REQUIRED, 'Reviewed keyed query/product click signals');
         $this->addOption('sales-channel', null, InputOption::VALUE_REQUIRED, 'Limit configuration to this sales channel UUID');
-        $this->addOption('merge-query-hints', null, InputOption::VALUE_NONE, 'Append reviewed hints to the effective existing hints');
         $this->addOption('merge-query-clicks', null, InputOption::VALUE_NONE, 'Merge keyed query click signals without removing existing entries');
     }
 
@@ -35,12 +33,9 @@ final class ImportSignalsCommand extends Command
         if ($channel !== null && (!is_string($channel) || !preg_match('/^[a-f0-9]{32}$/D', $channel))) {
             throw new \InvalidArgumentException('Invalid sales channel UUID.');
         }
-        $files = ['popularity' => $input->getOption('popularity'), 'hints' => $input->getOption('query-hints'), 'queryClicks' => $input->getOption('query-clicks')];
-        if (!$files['popularity'] && !$files['hints'] && !$files['queryClicks']) {
-            throw new \InvalidArgumentException('Provide --popularity, --query-hints and/or --query-clicks.');
-        }
-        if ($input->getOption('merge-query-hints') && !$files['hints']) {
-            throw new \InvalidArgumentException('--merge-query-hints requires --query-hints.');
+        $files = ['popularity' => $input->getOption('popularity'), 'queryClicks' => $input->getOption('query-clicks')];
+        if (!$files['popularity'] && !$files['queryClicks']) {
+            throw new \InvalidArgumentException('Provide --popularity and/or --query-clicks.');
         }
         if ($input->getOption('merge-query-clicks') && !$files['queryClicks']) {
             throw new \InvalidArgumentException('--merge-query-clicks requires --query-clicks.');
@@ -65,17 +60,13 @@ final class ImportSignalsCommand extends Command
                 }
             }
             else FeedbackConfig::parse($json, $kind);
-            if ($kind === 'hints' && $input->getOption('merge-query-hints')) {
-                $existing = $this->config->getString('ShopwareMeilisearch.config.queryHints', $channel);
-                $json = FeedbackConfig::mergeHints($existing, $json);
-            }
-            $setting = match ($kind) { 'popularity' => 'popularityWeights', 'hints' => 'queryHints', 'queryClicks' => 'queryClickFeedback' };
+            $setting = match ($kind) { 'popularity' => 'popularityWeights', 'queryClicks' => 'queryClickFeedback' };
             $values[$setting] = $json;
         }
         foreach ($values as $key => $json) {
             $this->config->set('ShopwareMeilisearch.config.' . $key, $json, $channel);
         }
-        $output->writeln(isset($values['popularityWeights']) || isset($values['queryHints'])
+        $output->writeln(isset($values['popularityWeights'])
             ? 'Imported signals. Run shopware-meilisearch:search:index to publish indexed signals.'
             : 'Imported query-specific signals; no index rebuild is needed.');
 

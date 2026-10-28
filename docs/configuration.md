@@ -54,8 +54,12 @@ workers, database and host memory before using it. See [security](security.md).
 | Suchvorschläge je Sprache | `popularQueries` | Locale → list of suggested queries | No |
 | Startprodukte je Sprache | `featuredProductIds` | Locale → up to ten product UUIDs | No |
 | Produktbeliebtheit je Sprache | `popularityWeights` | Locale → product UUID → integer weight | Yes |
-| Historische Suchbegriffe je Produkt und Sprache | `queryHints` | Locale → product UUID → reviewed query strings | Yes |
 | Optionale Klicksignale für genaue Suchanfragen | `queryClickFeedback` | Versioned keyed query/product weights | No; feedback secret must match |
+
+Upgrading from a version with `queryHints`: that setting is no longer used or
+imported. Review and transfer any needed terms to the appropriate Shopware
+product search keywords before rebuilding. The old stored configuration is not
+automatically deleted; a successful rebuild removes those hints from the index.
 
 The backend button **Suchindex jetzt neu aufbauen** requests a background build
 for all enabled channels and their storefront languages. Save settings before
@@ -98,7 +102,7 @@ The controls preserve the existing JSON storage format. Opening a control does
 not rewrite values. If an existing value cannot be interpreted safely, the UI
 shows it for correction instead of silently replacing it. Index fields, locale
 overrides and unit mappings require a successful rebuild after saving. More
-advanced synonym, popularity, hint and keyed-feedback inputs retain their JSON or
+advanced synonym, popularity and keyed-feedback inputs retain their JSON or
 reviewed-import workflows; keyed feedback uses the separate feedback secret.
 
 ## Searchable fields and language handling

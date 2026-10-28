@@ -18,7 +18,7 @@ final class IndexInvalidationSubscriber implements EventSubscriberInterface
         'unit', 'unit_translation', 'delivery_time', 'delivery_time_translation',
         'sales_channel', 'sales_channel_domain', 'sales_channel_language', 'language', 'locale',
     ];
-    private const INDEX_CONFIG = ['enabled', 'indexFields', 'indexFieldsByLanguage', 'quantityUnits', 'synonyms', 'popularityWeights', 'queryHints'];
+    private const INDEX_CONFIG = ['enabled', 'indexFields', 'indexFieldsByLanguage', 'quantityUnits', 'synonyms', 'popularityWeights'];
 
     public function __construct(private readonly DirtyState $state, private readonly LoggerInterface $logger)
     {

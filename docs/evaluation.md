@@ -15,7 +15,7 @@ exported data or prove that the candidate is as relevant as a reference service.
 | Tool(s) in `tools/` | Purpose |
 | --- | --- |
 | `export_product_paths.php`, `map_product_references.py` | Associate private reference URLs/identifiers with catalog products |
-| `build_popularity.py`, `build_query_hints.py`, `build_reviewed_hints.py` | Prepare optional language-specific reviewed ranking inputs |
+| `build_popularity.py` | Prepare optional language-specific reviewed ranking inputs |
 | `build_query_click_feedback.py` | Generate keyed exact-query/product signals; development partition is the default |
 | `capture_shopware.py`, `evaluate_shopware.py`, `evaluate_meilisearch.py` | Capture/evaluate candidate responses through their respective interfaces |
 | `compare_snapshots.py`, `compare_synthetic.py` | Compare rankings and synthetic query cases |
@@ -35,17 +35,17 @@ fixtures illustrate the respective schemas. No export from another search
 service is required to install or operate the plugin. Independently judged cases
 can be evaluated directly using the example below.
 
-Generated hints/weights must be reviewed before importing through:
+Generated weights and click signals must be reviewed before importing through:
 
 ```sh
 php bin/console shopware-meilisearch:search:import-signals \
   --sales-channel aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
-  --query-hints /private/output/reviewed-hints.json
+  --popularity /private/output/reviewed-popularity.json
 ```
 
-Optional `--popularity` and `--query-clicks` accept the corresponding JSON.
-`--merge-query-hints` and `--merge-query-clicks` retain existing reviewed inputs.
-Hints/popularity require an index rebuild; keyed exact-query feedback does not.
+`--query-clicks` accepts keyed exact-query feedback, and `--merge-query-clicks`
+retains existing reviewed feedback. Popularity requires an index rebuild;
+keyed exact-query feedback does not.
 
 The click-feedback builder's legacy default key environment name is
 `SHOPWARE_MEILISEARCH_KEY`. For current deployments explicitly pass

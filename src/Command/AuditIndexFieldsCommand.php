@@ -5,7 +5,6 @@ namespace ShopwareMeilisearch\Command;
 use Doctrine\DBAL\Connection;
 use ShopwareMeilisearch\Search\DocumentBuilder;
 use ShopwareMeilisearch\Search\Engine;
-use ShopwareMeilisearch\Search\FeedbackConfig;
 use ShopwareMeilisearch\Search\IndexFields;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -85,8 +84,7 @@ final class AuditIndexFieldsCommand extends Command
                     $this->config->getString('ShopwareMeilisearch.config.indexFields', $channel),
                     $this->config->getString('ShopwareMeilisearch.config.indexFieldsByLanguage', $channel), $locale
                 );
-                $hints = FeedbackConfig::parse($this->config->getString('ShopwareMeilisearch.config.queryHints', $channel), 'hints');
-                $expected = DocumentBuilder::settings([], $configured, $locale, ($hints[$locale] ?? []) !== [])['searchableAttributes'];
+                $expected = DocumentBuilder::settings([], $configured, $locale)['searchableAttributes'];
                 $counts = array_fill_keys($fields, 0); $offset = 0; $unnamed = 0;
                 do {
                     $response = $this->engine->request('GET', '/indexes/' . $index . '/documents?limit=1000&offset=' . $offset);
