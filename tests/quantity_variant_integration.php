@@ -28,13 +28,14 @@ $domains=[];foreach($rows as $row)$domains[$row['locale']]=$row;
 if(count($domains)!==5||count(array_unique(array_column($domains,'channel')))!==1)throw new RuntimeException('Five languages in one active test channel are required.');
 $channel=$domains['de-DE']['channel'];if(!$config->getBool('ShopwareMeilisearch.config.enabled',$channel))throw new RuntimeException('Enable local search in the test channel first.');
 $engine=new Engine(HttpClient::create(),getenv('SHOPWARE_MEILISEARCH_URL')?:'',getenv('SHOPWARE_MEILISEARCH_KEY')?:'');
-$search=static function(string $locale,string $query)use($host):array{
+$search=static function(string $locale,string $query,bool $strict=false)use($host):array{
  $ctx=stream_context_create(['http'=>['header'=>"Host: $host\r\nX-Requested-With: XMLHttpRequest\r\n",'timeout'=>60,'follow_location'=>0,'max_redirects'=>0]]);
- $html=file_get_contents(rtrim(getenv('EL_SEARCH_TEST_URL'),'/').'/'.substr($locale,0,2).'/shopware-meilisearch?'.http_build_query(['q'=>$query]),false,$ctx);
+ $parameters=['q'=>$query];if($strict)$parameters['similar']='0';
+ $html=file_get_contents(rtrim(getenv('EL_SEARCH_TEST_URL'),'/').'/'.substr($locale,0,2).'/shopware-meilisearch?'.http_build_query($parameters),false,$ctx);
  if($html===false||!str_contains($html,'data-el-result-status'))throw new RuntimeException('Local storefront unavailable.');
  $dom=new DOMDocument();@$dom->loadHTML($html);$xpath=new DOMXPath($dom);$ids=[];foreach($xpath->query('//article[@data-product-id]') as $node)$ids[]=$node->getAttribute('data-product-id');return $ids;
 };
-$litre='00000000000000000000000000100031';$units=ShopwareMeilisearch\Search\QuantityUnits::parse('');
+$litre=(getenv('EL_TEST_LITRE_UNIT_ID') ?: '');if(!preg_match('/^[a-f0-9]{32}$/D',$litre))throw new RuntimeException('Set EL_TEST_LITRE_UNIT_ID for the isolated fixture.');$units=ShopwareMeilisearch\Search\QuantityUnits::parse($config->getString('ShopwareMeilisearch.config.quantityUnits',$channel));
 $rows=$db->fetchAllAssociative("SELECT LOWER(HEX(a.id)) first_id,LOWER(HEX(b.id)) second_id,a.product_number first_number,b.product_number second_number,a.purchase_unit first_amount,b.purchase_unit second_amount FROM product a JOIN product b ON b.parent_id=a.parent_id AND b.parent_version_id=a.parent_version_id AND b.id>a.id WHERE a.version_id=UNHEX('0fa91ce3e96a4bc2be4bd9ce752c3425') AND b.version_id=a.version_id AND a.parent_id IS NOT NULL AND a.active=1 AND b.active=1 AND a.unit_id=UNHEX(:unit1) AND b.unit_id=UNHEX(:unit2) AND a.purchase_unit>0 AND b.purchase_unit>0 AND a.purchase_unit<>b.purchase_unit LIMIT 200",['unit1'=>$litre,'unit2'=>$litre]);
 foreach($domains as $locale=>$domain){
  $index=Engine::indexName($channel,$domain['language']);$selected=null;$originalDocs=[];
@@ -84,7 +85,9 @@ foreach($domains as $locale=>$domain){
   }
   $engine->mutate('POST','/indexes/'.$index.'/documents',$decimalDocs);
 
-  foreach($domains as $otherLocale=>$_)if($otherLocale!==$locale){$ids=$search($otherLocale,$token.' '.$docs[0]['quantity'][0]);if(in_array($docs[0]['id'],$ids,true)||in_array($docs[1]['id'],$ids,true))throw new RuntimeException('Quantity test keyword crossed a language boundary.');}
+  // Query the synthetic keyword by itself: a quantity is language-neutral and
+  // can legitimately match a product in a different language's index.
+  foreach($domains as $otherLocale=>$_)if($otherLocale!==$locale){$ids=$search($otherLocale,$token,true);if(in_array($docs[0]['id'],$ids,true)||in_array($docs[1]['id'],$ids,true))throw new RuntimeException('Quantity test keyword crossed a language boundary.');}
   if($locale==='de-DE'){
    $candidates=$db->fetchAllAssociative("SELECT LOWER(HEX(p.id)) id,p.product_number number FROM product p JOIN product_visibility v ON v.product_id=p.id AND v.product_version_id=p.version_id WHERE p.version_id=UNHEX('0fa91ce3e96a4bc2be4bd9ce752c3425') AND p.active=1 AND p.parent_id IS NULL AND v.sales_channel_id=UNHEX(:channel) AND v.visibility>=20 AND NOT EXISTS(SELECT 1 FROM product c WHERE c.parent_id=p.id AND c.parent_version_id=p.version_id) LIMIT 100",['channel'=>$channel]);
    foreach($candidates as $candidate){

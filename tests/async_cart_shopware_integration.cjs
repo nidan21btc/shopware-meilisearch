@@ -17,7 +17,9 @@ if(target.protocol!=='http:'||target.hostname!=='127.0.0.1'||!/^[a-zA-Z0-9.-]+$/
   await page.goto(origin+'/de/',{waitUntil:'domcontentloaded',timeout:60000});
   await page.addStyleTag({content:'.sf-toolbar{display:none!important}'});
   const cookie=page.getByRole('button',{name:/Ablehnen|Reject all/i}).first();if(await cookie.isVisible().catch(()=>false))await cookie.click();
-  await page.locator('.search-toggle-btn').filter({visible:true}).first().click();
+  const toggle=page.locator('.search-toggle-btn').filter({visible:true}).first();
+  if(await toggle.isVisible().catch(()=>false))await toggle.click();
+  else await page.locator('.header-search-input').filter({visible:true}).first().focus();
   await page.waitForFunction(()=>document.querySelector('[data-el-results]')?.getAttribute('aria-busy')==='false');
   await page.evaluate(()=>{
    const manager=window.PluginManager,original=manager.initializePlugin.bind(manager);

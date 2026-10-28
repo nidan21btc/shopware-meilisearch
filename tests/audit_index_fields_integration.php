@@ -29,7 +29,9 @@ $check=static function(array $report,bool $matches):void{
  foreach($report as $entry){
   if(($entry['fieldConfigurationMatchesPublishedIndex']??null)!==$matches||!is_int($entry['indexedProducts']??null)||$entry['indexedProducts']<1)throw new RuntimeException('Incorrect field configuration or product count.');
   foreach($entry['fieldCoverage']??[] as $count)if(!is_int($count)||$count<0||$count>$entry['indexedProducts'])throw new RuntimeException('Invalid coverage count.');
-  if(!array_key_exists('customFields.custom_products_local',$entry['fieldCoverage']??[])||($entry['fieldCoverage']['customFields.custom_products_local']??0)<1)throw new RuntimeException('Expected configured custom field coverage.');
+  if(!array_key_exists('name',$entry['fieldCoverage']??[])||($entry['fieldCoverage']['name']??0)<1)throw new RuntimeException('Expected configured name field coverage.');
+  $customField=getenv('EL_TEST_CUSTOM_FIELD')?:'';
+  if($customField!==''&&(!preg_match('/^customFields\.[a-zA-Z0-9_]{1,128}$/D',$customField)||!array_key_exists($customField,$entry['fieldCoverage']??[])||($entry['fieldCoverage'][$customField]??0)<1))throw new RuntimeException('Expected configured custom field coverage.');
  }
 };
 $check($run(),true);

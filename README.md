@@ -31,5 +31,9 @@ SHOPWARE_ROOT=/path/to/shopware python3 -m unittest discover -s tests -p 'test_*
 
 Integration tests require an isolated test shop and may change its database or
 indexes temporarily. Read each test's prerequisites before running it.
+Quantity and reference-unit integration tests require an explicitly configured
+fixture unit via `EL_TEST_LITRE_UNIT_ID`; field-audit tests can optionally check
+an installation-specific custom field via `EL_TEST_CUSTOM_FIELD`. The real
+cart-icon test requires `EL_TEST_QUERY` for a purchasable fixture product.
 The sanitized general-purpose version still requires integration testing in a
 separate shop before production use.

@@ -73,6 +73,7 @@
 .el-search .product-action,.el-search .buy-widget { margin:0; }
 .el-search .el-search__cart { display:inline-flex; align-items:center; justify-content:center; line-height:1; background:var(--el-gold); border:0; color:white; width:40px; height:40px; padding:8px; border-radius:6px; }
 .el-search__cart .icon,.el-search__cart svg { color:inherit; }
+.el-search .el-search__cart .icon > svg { top:0; display:block; }
 .el-search__cart:hover { background:#ab8342; }
 .el-search .btn-detail { font-size:11px; padding:6px; }
 .el-search__pagination { display:flex; justify-content:center; align-items:center; gap:24px; padding:32px 0; }

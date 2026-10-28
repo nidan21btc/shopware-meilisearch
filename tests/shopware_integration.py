@@ -89,7 +89,7 @@ def main():
     for locale in ['de', 'en', 'es', 'fr', 'it']:
         start = load(locale, {'q': ''})
         assert len(start.products) == 10, f'{locale}: expected 10 discovery products'
-        assert start.suggestions > 0, f'{locale}: missing locale-specific suggestions'
+        assert start.suggestions == 0, f'{locale}: neutral defaults must not include shop-specific suggestions'
         search = load(locale, {'q': 'bach'})
         assert search.products, f'{locale}: expected Bach products'
         assert len(search.products) <= 20
@@ -106,24 +106,13 @@ def main():
     second = load('de', {'q': 'bach', 'page': '2'})
     assert first.products and second.products and set(first.products).isdisjoint(second.products), 'Pagination duplicates products'
     assert first.facets['category[]'] and first.facets['manufacturer[]'], 'Expected product facets'
-    assert first.slider_count == 2, 'Expected two price slider handles'
-    assert len(first.prices) == len(first.products) and all(first.slider_bounds[0] <= price <= first.slider_bounds[1] for price in first.prices), 'A displayed price is outside the slider bounds'
+    assert first.slider_count == 0, 'The search overlay must not display a price filter'
     expanded = load('de', {'q': 'bach', 'similar': '1'})
-    assert expanded.slider_bounds[0] <= first.slider_bounds[0] and expanded.slider_bounds[1] >= first.slider_bounds[1], 'Expanding results unexpectedly narrowed the price bounds'
-    assert len(expanded.prices) == len(expanded.products) and all(expanded.slider_bounds[0] <= price <= expanded.slider_bounds[1] for price in expanded.prices), 'An expanded result is outside the slider bounds'
+    assert expanded.slider_count == 0, 'Expanded results must not display a price filter'
     category = load('de', {'q': 'bach', 'category[]': first.facets['category[]'][0]})
     manufacturer = load('de', {'q': 'bach', 'manufacturer[]': first.facets['manufacturer[]'][0]})
     assert category.products and manufacturer.products, 'Selected facets lost all expected products'
-    no_price_match = load('de', {'q': 'bach', 'maxPrice': '0'})
-    assert not no_price_match.products, 'Price filtering failed'
-    low = load('de', {'q': 'bach', 'maxPrice': '10'})
-    assert low.products and len(low.prices) == len(low.products) and all(price <= 10 for price in low.prices), 'A displayed price exceeds the selected maximum'
-    for direction in ['price-asc', 'price-desc']:
-        priced = load('de', {'q': 'bach', 'minPrice': '10', 'maxPrice': '20', 'sort': direction})
-        assert priced.products and len(priced.prices) == len(priced.products), 'Could not read each displayed price'
-        assert all(10 <= price <= 20 for price in priced.prices), 'Displayed price is outside the requested range'
-        assert priced.prices == sorted(priced.prices, reverse=direction == 'price-desc'), 'Cards are not sorted by their displayed price'
-    print('Shopware integration checks passed: five locales, discovery, pagination, facets, prices, private caching.')
+    print('Shopware integration checks passed: five locales, discovery, pagination, facets, no price filter, private caching.')
 
 
 if __name__ == '__main__':

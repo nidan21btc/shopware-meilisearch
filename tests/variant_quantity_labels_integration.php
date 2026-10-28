@@ -13,7 +13,7 @@ $root=getenv('PROJECT_ROOT')?:'';if(!is_file($root.'/vendor/autoload.php'))throw
 $loader=require $root.'/vendor/autoload.php';$kernel=KernelFactory::create('dev',true,$loader);$kernel->boot();$container=$kernel->getContainer();$db=$container->get(Connection::class);$config=$container->get(SystemConfigService::class);
 $domains=$db->fetchAllAssociative("SELECT DISTINCT LOWER(HEX(d.sales_channel_id)) channel,LOWER(HEX(d.language_id)) language,o.code locale FROM sales_channel_domain d JOIN language l ON l.id=d.language_id JOIN locale o ON o.id=l.locale_id JOIN sales_channel s ON s.id=d.sales_channel_id WHERE s.active=1 AND o.code IN ('de-DE','en-GB','es-ES','fr-FR','it-IT')");
 if(count($domains)!==5)throw new RuntimeException('Five test languages required.');
-$unit='00000000000000000000000000100031';
+$unit=(getenv('EL_TEST_LITRE_UNIT_ID') ?: '');if(!preg_match('/^[a-f0-9]{32}$/D',$unit))throw new RuntimeException('Set EL_TEST_LITRE_UNIT_ID for the isolated fixture.');
 foreach($domains as $domain){
  $mapping=QuantityUnits::parse($config->getString('ShopwareMeilisearch.config.quantityUnits',$domain['channel']));
  if(($mapping[$unit]['symbol']??null)!=='ml'||($mapping[$unit]['factor']??null)!==1000)throw new RuntimeException('The litre-to-millilitre test mapping is required.');
