@@ -13,12 +13,12 @@ Shopware.Module.register('sw-meilisearch-settings', {
         index: {
             component: 'sw-extension-config',
             path: 'index',
-            meta: {parentPath: 'sw.settings.index.shop', privilege: 'system.plugin_maintain'},
+            meta: {parentPath: 'sw.settings.index.plugins', privilege: 'system.plugin_maintain'},
             props: {default: () => ({namespace: 'ShopwareMeilisearch'})},
         },
     },
     settingsItem: {
-        group: 'general',
+        group: 'plugins',
         to: 'sw.meilisearch.settings.index',
         icon: 'regular-search',
         privilege: 'system.plugin_maintain',

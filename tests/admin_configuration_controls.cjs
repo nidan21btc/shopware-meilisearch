@@ -34,7 +34,7 @@ const unitB = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
   });
   await page.locator('#global li').first().waitFor();
   const menu=await page.evaluate(()=>({name:window.fixture.module.name, item:window.fixture.module.config.settingsItem, route:window.fixture.module.config.routes.index, props:window.fixture.module.config.routes.index.props.default()}));
-  assert.equal(menu.item.group,'general'); assert.equal(menu.item.to,'sw.meilisearch.settings.index'); assert.equal(menu.item.privilege,'system.plugin_maintain');
+  assert.equal(menu.item.group,'plugins'); assert.equal(menu.item.to,'sw.meilisearch.settings.index'); assert.equal(menu.item.privilege,'system.plugin_maintain');
   assert.equal(menu.route.component,'sw-extension-config'); assert.equal(menu.props.namespace,'ShopwareMeilisearch');
   assert.equal(await page.evaluate(()=>window.fixture.vm.global),'','Defaults must not be written on load');
   assert.equal(await page.locator('#global li').first().locator('.sw-meilisearch-config__item-technical').innerText(),'productNumber');

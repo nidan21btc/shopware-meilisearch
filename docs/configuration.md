@@ -6,7 +6,7 @@
 > own risk. It is provided "as is", without warranty to the extent permitted by law.
 > No support, maintenance, updates or bug fixes are promised.
 
-Open the configuration from **Settings → Shop → Meilisearch search** or from the
+Open the configuration from **Settings → Extensions → Meilisearch search** or from the
 extension list. Both links open the same settings, subject to Shopware plugin
 maintenance permission. Backend settings live under `ShopwareMeilisearch.config`. Use Shopware's normal
 sales-channel inheritance deliberately: the selected channel determines which
