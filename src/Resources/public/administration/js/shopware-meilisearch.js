@@ -38,14 +38,20 @@ Shopware.Component.register('sw-meilisearch-connection', {
         <h3>Verbindung zum Suchdienst</h3>
         <p>Diese Einstellungen gelten für den gesamten Shop. Die Schlüssel werden unverschlüsselt in der Datenbank gespeichert und nach dem Speichern nicht angezeigt. Bei einer Shop-Kopie muss die Verbindung neu eingerichtet werden.</p>
         <p v-if="!configured">Noch keine Verbindung in der Datenbank gespeichert. Alle drei Schlüssel sind erforderlich.</p>
-        <label>Lokale Adresse <input v-model="form.url" class="sw-meilisearch-config__input" /></label>
-        <label>Unix-Socket (optional) <input v-model="form.socket" class="sw-meilisearch-config__input" /></label>
-        <label>Gleichzeitige Anfragen <input v-model.number="form.concurrency" type="number" min="1" max="10" class="sw-meilisearch-config__input" /></label>
-        <label>Globale Anfragen pro Sekunde <input v-model.number="form.globalRate" type="number" min="1" max="10" class="sw-meilisearch-config__input" /></label>
-        <label>Anfragen pro IP und Sekunde <input v-model.number="form.clientRate" type="number" min="1" max="10" class="sw-meilisearch-config__input" /></label>
-        <label>Suchschlüssel <input v-model="form.searchKey" type="password" autocomplete="new-password" class="sw-meilisearch-config__input" /></label>
-        <label>Indexschlüssel <input v-model="form.indexKey" type="password" autocomplete="new-password" class="sw-meilisearch-config__input" /></label>
-        <label>Statusschlüssel <input v-model="form.statusKey" type="password" autocomplete="new-password" class="sw-meilisearch-config__input" /></label>
+        <div class="sw-meilisearch-connection__grid">
+            <label>Lokale Adresse <input v-model="form.url" class="sw-meilisearch-config__input" /></label>
+            <label>Unix-Socket (optional) <input v-model="form.socket" class="sw-meilisearch-config__input" /></label>
+        </div>
+        <div class="sw-meilisearch-connection__grid">
+            <label>Gleichzeitige Anfragen <input v-model.number="form.concurrency" type="number" min="1" max="10" class="sw-meilisearch-config__input" /></label>
+            <label>Globale Anfragen pro Sekunde <input v-model.number="form.globalRate" type="number" min="1" max="10" class="sw-meilisearch-config__input" /></label>
+            <label>Anfragen pro IP und Sekunde <input v-model.number="form.clientRate" type="number" min="1" max="10" class="sw-meilisearch-config__input" /></label>
+        </div>
+        <div class="sw-meilisearch-connection__grid">
+            <label>Suchschlüssel <input v-model="form.searchKey" type="password" autocomplete="new-password" :placeholder="configured ? 'Unverändert lassen' : 'Schlüssel eingeben'" class="sw-meilisearch-config__input" /></label>
+            <label>Indexschlüssel <input v-model="form.indexKey" type="password" autocomplete="new-password" :placeholder="configured ? 'Unverändert lassen' : 'Schlüssel eingeben'" class="sw-meilisearch-config__input" /></label>
+            <label>Statusschlüssel <input v-model="form.statusKey" type="password" autocomplete="new-password" :placeholder="configured ? 'Unverändert lassen' : 'Schlüssel eingeben'" class="sw-meilisearch-config__input" /></label>
+        </div>
         <p>Felder für Schlüssel leer lassen, um bestehende Schlüssel beizubehalten.</p>
         <sw-button variant="primary" :disabled="busy || !acl.can('system_config:update')" @click="save">Verbindung speichern</sw-button>
     </section>`,
