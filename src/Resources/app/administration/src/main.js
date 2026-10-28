@@ -1,4 +1,10 @@
 /* No external packages or runtime downloads. Loaded as a Shopware administration extension. */
+Shopware.Component.extend('sw-meilisearch-settings-page', 'sw-extension-config', {
+    computed: {
+        extensionLabel() { return this.$t('shopware-meilisearch.settings.title'); },
+    },
+});
+
 Shopware.Module.register('sw-meilisearch-settings', {
     type: 'plugin',
     name: 'ShopwareMeilisearchSettings',
@@ -11,7 +17,7 @@ Shopware.Module.register('sw-meilisearch-settings', {
     },
     routes: {
         index: {
-            component: 'sw-extension-config',
+            component: 'sw-meilisearch-settings-page',
             path: 'index',
             meta: {parentPath: 'sw.settings.index.plugins', privilege: 'system.plugin_maintain'},
             props: {default: () => ({namespace: 'ShopwareMeilisearch'})},
