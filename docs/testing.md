@@ -14,6 +14,7 @@ Shopware's `vendor/` and `bin/console`, not to its public document root.
 ```sh
 SHOPWARE_ROOT=/path/to/shopware php tests/run.php
 SHOPWARE_ROOT=/path/to/shopware php tests/search_guard.php
+SHOPWARE_ROOT=/path/to/shopware php tests/admission_metrics.php
 php tests/defaults.php
 SHOPWARE_ROOT=/path/to/shopware python3 -m unittest discover -s tests -p 'test_*.py'
 ```
@@ -36,6 +37,10 @@ checker on JavaScript/CJS. Keep these two files byte-identical:
 src/Resources/app/administration/src/main.js
 src/Resources/public/administration/js/shopware-meilisearch.js
 ```
+
+The admission metrics regression covers shared reason counters, timing/peak
+measurements, summary throttling, private files, nonblocking contention and
+logging failure isolation. It uses synthetic data and temporary files only.
 
 ## Credentialed-page browser regression
 

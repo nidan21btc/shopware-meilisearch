@@ -2,6 +2,10 @@
 
 ## 0.2.0
 
+- Add bounded, process-shared admission statistics and a dedicated private rotating
+  log: rejection reasons, admitted/completed requests, sampled peak concurrency
+  and server-side mean/max duration, with at most one summary per minute.
+
 - Resolve storefront search URLs against the credential-free origin, preserving
   same-origin HTTP authentication when a page URL contains userinfo. Cover initial
   and typed searches with a synthetic Firefox/Chromium regression.

@@ -20,7 +20,14 @@
         <service id="shopware_meilisearch.write_secret" class="ShopwareMeilisearch\Security\Secret"><argument>%env(string:SHOPWARE_MEILISEARCH_KEY)%</argument><argument>%env(string:SHOPWARE_MEILISEARCH_KEY_FILE)%</argument></service>
         <service id="shopware_meilisearch.search_secret" class="ShopwareMeilisearch\Security\Secret"><argument>%env(string:SHOPWARE_MEILISEARCH_SEARCH_KEY)%</argument><argument>%env(string:SHOPWARE_MEILISEARCH_SEARCH_KEY_FILE)%</argument></service>
         <service id="shopware_meilisearch.feedback_secret" class="ShopwareMeilisearch\Security\Secret"><argument>%env(string:SHOPWARE_MEILISEARCH_FEEDBACK_KEY)%</argument><argument>%env(string:SHOPWARE_MEILISEARCH_FEEDBACK_KEY_FILE)%</argument></service>
-        <service id="ShopwareMeilisearch\Security\SearchRequestGuard"><argument>%kernel.project_dir%/var/shopware-meilisearch/admission</argument><argument>%env(int:SHOPWARE_MEILISEARCH_CONCURRENCY)%</argument><argument>%env(int:SHOPWARE_MEILISEARCH_GLOBAL_RATE)%</argument><argument>%env(int:SHOPWARE_MEILISEARCH_CLIENT_RATE)%</argument><tag name="kernel.event_subscriber"/></service>
+        <service id="shopware_meilisearch.admission_log_handler" class="Monolog\Handler\RotatingFileHandler">
+            <argument>%kernel.logs_dir%/shopware-meilisearch-admission.log</argument><argument>14</argument><argument>200</argument><argument>true</argument><argument>384</argument><argument>true</argument>
+        </service>
+        <service id="shopware_meilisearch.admission_logger" class="Monolog\Logger">
+            <argument>shopware_meilisearch_admission</argument><argument type="collection"><argument type="service" id="shopware_meilisearch.admission_log_handler"/></argument>
+        </service>
+        <service id="ShopwareMeilisearch\Security\AdmissionMetrics"><argument>%kernel.project_dir%/var/shopware-meilisearch/metrics</argument><argument type="service" id="shopware_meilisearch.admission_logger"/></service>
+        <service id="ShopwareMeilisearch\Security\SearchRequestGuard"><argument>%kernel.project_dir%/var/shopware-meilisearch/admission</argument><argument>%env(int:SHOPWARE_MEILISEARCH_CONCURRENCY)%</argument><argument>%env(int:SHOPWARE_MEILISEARCH_GLOBAL_RATE)%</argument><argument>%env(int:SHOPWARE_MEILISEARCH_CLIENT_RATE)%</argument><argument type="service" id="ShopwareMeilisearch\Security\AdmissionMetrics"/><tag name="kernel.event_subscriber"/></service>
         <service id="ShopwareMeilisearch\Controller\ReindexController" public="true"><argument type="service" id="ShopwareMeilisearch\Search\DirtyState"/><tag name="controller.service_arguments"/></service>
         <service id="shopware_meilisearch.read_engine" class="ShopwareMeilisearch\Search\Engine">
             <argument type="service" id="http_client"/><argument>%env(string:SHOPWARE_MEILISEARCH_URL)%</argument><argument type="service" id="shopware_meilisearch.search_secret"/><argument>%env(string:SHOPWARE_MEILISEARCH_SOCKET)%</argument>

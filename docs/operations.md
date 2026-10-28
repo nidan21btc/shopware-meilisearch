@@ -95,6 +95,57 @@ message for these cases; that message alone does not prove the engine is down.
 The guard's short `Retry-After` header is advisory; the browser's current retry
 button does not create an unlimited automatic retry loop.
 
+## Admission and capacity log
+
+The plugin writes a dedicated rotating Shopware application log at
+`var/log/shopware-meilisearch-admission-YYYY-MM-DD.log` (or the configured
+`kernel.logs_dir`). It retains 14 daily files and creates files with mode `0600`.
+This logger deliberately bypasses the standard production handler, which may
+filter out warning/info events. Ensure the PHP user can write the log directory;
+verify rotation and available disk space under your hosting permissions.
+
+Look for `Search admission summary`. Shared counters produce **at most one record
+per 60 seconds per installation**, triggered by the next admission/completion
+event. There is no timer or extra daemon: an idle last window is emitted when
+traffic resumes, with its actual `windowSeconds`. Counters are reset for the next
+window and stored privately in `var/shopware-meilisearch/metrics/metrics.json`.
+Do not delete/replace that file while requests are running. No IPs, client hashes,
+queries, cookies, URLs, channel identifiers or credentials are included.
+
+The structured context contains:
+
+- `counts.accepted`: admitted requests, not unique customers.
+- `counts.completed` / `counts.failed`: finished admitted requests, with HTTP 5xx
+  classified as failed; completion can fall in a later window than admission.
+- `counts.concurrency`, `global_rate`, `client_rate`, `client_capacity`: rejections
+  due to occupied computation slots, global tokens, client tokens or the bounded
+  client-state table. `client_capacity` does not mean the product catalog is full.
+- `counts.limiter_busy`: nonblocking contention on admission state;
+  `counts.limiter_error`: an unusable limiter, returned as HTTP 503.
+- `peakActive`: highest sampled number of occupied slot locks on admission.
+- `durationMeanMs` / `durationMaxMs`: server-side time from admission to request
+  completion, including PHP/context/rendering; not browser/network latency or
+  engine-only time. The mean is null when no admitted request finished.
+- `limits`: configured concurrency, global requests/second and client
+  requests/second. Burst/minute formulas remain as documented in
+  [configuration](configuration.md).
+
+Records with rejections or failed requests have level WARNING; other windows
+have level INFO. Missing counter keys mean zero. Compare repeated windows with
+CPU, available memory, swap and latency before changing limits. A few client-limit
+hits can indicate a single burst, not general capacity exhaustion. Low host load
+with frequent concurrency/global rejections may justify a bounded adjustment;
+high load and rising durations require investigating capacity first.
+
+Statistics are **best effort**, not billing or an exact attack counter. Their
+separate lock is nonblocking, so overlapping updates can be skipped instead of
+queuing PHP workers; aborted/killed workers may lack a completion. Lock/storage
+or logging failures never bypass admission and do not fail an otherwise valid
+search. They can suppress statistics; absence of entries does not prove absence
+of traffic. The fixed-size state is capped at 8 KiB and per-window counts saturate
+at one billion. Log output is bounded to 1,440 summaries/day; ordinary application
+and web-server logs have their own independent policies.
+
 ## Troubleshooting
 
 | Symptom | Check |
