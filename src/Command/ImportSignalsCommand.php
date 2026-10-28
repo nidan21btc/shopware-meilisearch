@@ -3,7 +3,6 @@
 namespace ShopwareMeilisearch\Command;
 
 use ShopwareMeilisearch\Search\FeedbackConfig;
-use ShopwareMeilisearch\Search\QueryClickFeedback;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -14,7 +13,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 #[AsCommand(name: 'shopware-meilisearch:search:import-signals', description: 'Import reviewed, language-specific local search signals from JSON files.')]
 final class ImportSignalsCommand extends Command
 {
-    public function __construct(private readonly SystemConfigService $config, private readonly string|\ShopwareMeilisearch\Security\Secret $signalKey = '')
+    public function __construct(private readonly SystemConfigService $config)
     {
         parent::__construct();
     }
@@ -22,9 +21,7 @@ final class ImportSignalsCommand extends Command
     protected function configure(): void
     {
         $this->addOption('popularity', null, InputOption::VALUE_REQUIRED, 'JSON file with per-product counts');
-        $this->addOption('query-clicks', null, InputOption::VALUE_REQUIRED, 'Reviewed keyed query/product click signals');
         $this->addOption('sales-channel', null, InputOption::VALUE_REQUIRED, 'Limit configuration to this sales channel UUID');
-        $this->addOption('merge-query-clicks', null, InputOption::VALUE_NONE, 'Merge keyed query click signals without removing existing entries');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -33,12 +30,9 @@ final class ImportSignalsCommand extends Command
         if ($channel !== null && (!is_string($channel) || !preg_match('/^[a-f0-9]{32}$/D', $channel))) {
             throw new \InvalidArgumentException('Invalid sales channel UUID.');
         }
-        $files = ['popularity' => $input->getOption('popularity'), 'queryClicks' => $input->getOption('query-clicks')];
-        if (!$files['popularity'] && !$files['queryClicks']) {
-            throw new \InvalidArgumentException('Provide --popularity and/or --query-clicks.');
-        }
-        if ($input->getOption('merge-query-clicks') && !$files['queryClicks']) {
-            throw new \InvalidArgumentException('--merge-query-clicks requires --query-clicks.');
+        $files = ['popularity' => $input->getOption('popularity')];
+        if (!$files['popularity']) {
+            throw new \InvalidArgumentException('Provide --popularity.');
         }
         $values = [];
         foreach ($files as $kind => $path) {
@@ -52,23 +46,14 @@ final class ImportSignalsCommand extends Command
             if ($json === false) {
                 throw new \RuntimeException('Cannot read signal file.');
             }
-            if ($kind === 'queryClicks') {
-                QueryClickFeedback::parse($json, (string) $this->signalKey);
-                if ($input->getOption('merge-query-clicks')) {
-                    $existing = $this->config->getString('ShopwareMeilisearch.config.queryClickFeedback', $channel);
-                    $json = QueryClickFeedback::merge($existing, $json, (string) $this->signalKey);
-                }
-            }
-            else FeedbackConfig::parse($json, $kind);
-            $setting = match ($kind) { 'popularity' => 'popularityWeights', 'queryClicks' => 'queryClickFeedback' };
+            FeedbackConfig::parse($json, $kind);
+            $setting = 'popularityWeights';
             $values[$setting] = $json;
         }
         foreach ($values as $key => $json) {
             $this->config->set('ShopwareMeilisearch.config.' . $key, $json, $channel);
         }
-        $output->writeln(isset($values['popularityWeights'])
-            ? 'Imported signals. Run shopware-meilisearch:search:index to publish indexed signals.'
-            : 'Imported query-specific signals; no index rebuild is needed.');
+        $output->writeln('Imported popularity. Run shopware-meilisearch:search:index to publish it.');
 
         return self::SUCCESS;
     }

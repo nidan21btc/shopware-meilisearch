@@ -29,7 +29,6 @@ use ShopwareMeilisearch\Search\PartialMatches;
 use ShopwareMeilisearch\Search\OrthographicFallback;
 use ShopwareMeilisearch\Search\ShortQueryPrecision;
 use ShopwareMeilisearch\Search\MultiwordPrecision;
-use ShopwareMeilisearch\Search\QueryClickFeedback;
 use ShopwareMeilisearch\Search\QuantityUnits;
 use ShopwareMeilisearch\Search\QuantityRelevance;
 use ShopwareMeilisearch\Search\VariantQuantityLabel;
@@ -399,31 +398,6 @@ check(SearchService::matchedParents(['child' => 'parent'], ['parent' => true], [
 $priceInput = new SearchInput('', 1, 'relevance', [], [], 10.0, 15.0, false);
 check(SearchService::filterByDisplayedPrice(['one', 'two', 'three', 'missing'], ['one' => 10.0, 'two' => 15.0, 'three' => 15.01], $priceInput) === ['one', 'two'], 'Filter by the actual displayed price and include the bounds');
 check(FeedbackConfig::parse('{"de-DE":{"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa":5}}', 'popularity')['de-DE'][$channel] === 5, 'Parse per-language popularity');
-$digest = QueryClickFeedback::fingerprint('de-DE', "  BLA\u{0308}TTER\tTest ", 'local-test-key');
-check($digest === '10093bd0c0686b5e3b7ba4619354bf8be861c5614059710f2127e2283406d0f8', 'PHP and local generator use the same normalized keyed query fingerprint');
-check($digest !== QueryClickFeedback::fingerprint('en-GB', "  BLA\u{0308}TTER\tTest ", 'local-test-key'), 'Query feedback cannot cross language scopes');
-check(QueryClickFeedback::keyCheck('local-test-key') === 'f7a0cc182218696c297fc4c83120b95b7b227636d5365c37fd0fb12451b69823', 'PHP and local generator use the same key validation marker');
-$ids = array_map(static fn (int $n): string => str_repeat(dechex($n), 32), range(1, 7));
-$queryFeedback = json_encode(['version' => 1, 'keyCheck' => QueryClickFeedback::keyCheck('local-test-key'), 'locales' => ['de-DE' => [$digest => [$ids[4] => 3, $ids[5] => 8]]]], JSON_THROW_ON_ERROR);
-check(QueryClickFeedback::parse($queryFeedback, 'local-test-key')['de-DE'][$digest][$ids[5]] === 8, 'Parse keyed query feedback');
-check(QueryClickFeedback::rerank($ids, [$ids[4] => 3, $ids[5] => 8, str_repeat('f', 32) => 100]) === [$ids[0], $ids[1], $ids[2], $ids[5], $ids[4], $ids[3], $ids[6]], 'Keep first three results and promote only eligible feedback products');
-check(QueryClickFeedback::rerank($ids, [$ids[5] => 8], array_slice($ids, 0, 4)) === $ids, 'Similar matches cannot pass exact matches');
-try { QueryClickFeedback::parse(json_encode(['version' => 1, 'keyCheck' => QueryClickFeedback::keyCheck('local-test-key'), 'locales' => ['de-DE' => ['plaintext' => [$channel => 2]]]], JSON_THROW_ON_ERROR), 'local-test-key'); throw new RuntimeException('Plaintext feedback key accepted'); }
-catch (InvalidArgumentException) { ++$checks; }
-try { QueryClickFeedback::parse($queryFeedback, 'wrong-key'); throw new RuntimeException('Feedback with another key accepted'); }
-catch (InvalidArgumentException) { ++$checks; }
-$enDigest = QueryClickFeedback::fingerprint('en-GB', 'calm', 'local-test-key');
-$additionalFeedback = json_encode(['version' => 1, 'keyCheck' => QueryClickFeedback::keyCheck('local-test-key'), 'locales' => ['de-DE' => [$digest => [$ids[4] => 9]], 'en-GB' => [$enDigest => [$ids[0] => 2]]]], JSON_THROW_ON_ERROR);
-$combinedFeedback = QueryClickFeedback::merge($queryFeedback, $additionalFeedback, 'local-test-key');
-$combinedData = QueryClickFeedback::parse($combinedFeedback, 'local-test-key');
-check($combinedData['de-DE'][$digest][$ids[4]] === 9 && $combinedData['de-DE'][$digest][$ids[5]] === 8 && $combinedData['en-GB'][$enDigest][$ids[0]] === 2, 'Merge query clicks without losing other products or languages');
-check(QueryClickFeedback::merge($combinedFeedback, $additionalFeedback, 'local-test-key') === $combinedFeedback, 'Repeated query click imports are idempotent');
-try {
-    $fullFeedback = json_encode(['version' => 1, 'keyCheck' => QueryClickFeedback::keyCheck('local-test-key'), 'locales' => ['de-DE' => [$digest => array_fill_keys(array_slice($ids, 0, 5), 2)]]], JSON_THROW_ON_ERROR);
-    $extraFeedback = json_encode(['version' => 1, 'keyCheck' => QueryClickFeedback::keyCheck('local-test-key'), 'locales' => ['de-DE' => [$digest => [$ids[5] => 2]]]], JSON_THROW_ON_ERROR);
-    QueryClickFeedback::merge($fullFeedback, $extraFeedback, 'local-test-key');
-    throw new RuntimeException('Oversized feedback merge accepted');
-} catch (InvalidArgumentException) { ++$checks; }
 foreach ([['{"de-DE":{"bad":2}}','popularity'], ['{"de-DE":{"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa":-1}}','popularity'], ['["invalid"]','popularity']] as [$badJson, $kind]) {
     try {
         FeedbackConfig::parse($badJson, $kind);

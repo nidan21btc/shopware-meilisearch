@@ -159,7 +159,6 @@ and web-server logs have their own independent policies.
 | Rebuild pending indefinitely | Both scheduler and consumer, correct transport/command, task status and worker logs |
 | Indexing process killed | Provider/cgroup memory limit and OOM records; indexing-memory alone is not total RSS |
 | New language/index denied | Re-provision scoped keys including its published and building names |
-| Query feedback rejected after key changes | Regenerate with the independent feedback secret, not a search or writer key |
 
 Never paste raw environment files, authorization headers, query text or private
 exports into public tickets. The storefront controller's application error log

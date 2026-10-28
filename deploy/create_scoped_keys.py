@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create protected, index-scoped read/write credentials and an independent feedback secret.
+"""Create protected, index-scoped read/write credentials.
 
 Run locally as the service administrator. Never pass keys in command arguments.
 Output directory must not exist. Does not alter documents, index settings or the master key.
@@ -10,7 +10,6 @@ import json
 import os
 from pathlib import Path
 import re
-import secrets
 import socket
 import urllib.parse
 from managed_socket_search import read_secret
@@ -52,7 +51,6 @@ def main():
             result = request('POST', '/keys', {'name': 'Shopware '+role, 'actions': actions, 'indexes': indexes, 'expiresAt': None})
             created.append(result['uid'])
             with os.fdopen(os.open(a.output_dir/role, os.O_WRONLY|os.O_CREAT|os.O_EXCL, 0o600), 'w') as f: f.write(result['key'])
-        with os.fdopen(os.open(a.output_dir/'feedback', os.O_WRONLY|os.O_CREAT|os.O_EXCL, 0o600), 'w') as f: f.write(secrets.token_hex(32))
         with os.fdopen(os.open(a.output_dir/'key-ids.json', os.O_WRONLY|os.O_CREAT|os.O_EXCL, 0o600), 'w') as f: json.dump(created, f)
     except Exception:
         for uid in created:
@@ -61,6 +59,6 @@ def main():
         for f in a.output_dir.iterdir(): f.unlink()
         a.output_dir.rmdir()
         raise
-    print('Created private search, index and feedback credentials. No keys printed.')
+    print('Created private search, index and status credentials. No keys printed.')
 
 if __name__ == '__main__': main()

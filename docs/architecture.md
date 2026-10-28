@@ -45,9 +45,8 @@ matches. `IdentifierFallback` supplements exact identifier matches through
 Shopware when necessary. `SearchService` applies these rules and current
 Shopware eligibility rather than returning the engine's response directly.
 
-Keyed query/click feedback is applied by the application for exact normalized
-queries. It is not collected automatically. Historical clicks are a ranking
-signal, not independent ground truth; see [evaluation](evaluation.md).
+Historical clicks used for evaluation are not independent ground truth; see
+[evaluation](evaluation.md).
 
 At most 5,000 candidate IDs are processed per search, including supplemental
 hits. Meilisearch is configured with a 250 ms search cutoff and 5,000 maximum

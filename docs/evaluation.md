@@ -16,7 +16,6 @@ exported data or prove that the candidate is as relevant as a reference service.
 | --- | --- |
 | `export_product_paths.php`, `map_product_references.py` | Associate private reference URLs/identifiers with catalog products |
 | `build_popularity.py` | Prepare optional language-specific reviewed ranking inputs |
-| `build_query_click_feedback.py` | Generate keyed exact-query/product signals; development partition is the default |
 | `capture_shopware.py`, `evaluate_shopware.py`, `evaluate_meilisearch.py` | Capture/evaluate candidate responses through their respective interfaces |
 | `compare_snapshots.py`, `compare_synthetic.py` | Compare rankings and synthetic query cases |
 | `evaluate_catalog_recall.py`, `evaluate_prefix_recall.py`, `evaluate_typo_tolerance.py`, `evaluate_umlaut_queries.py` | Focused recall, prefix and orthography checks |
@@ -35,7 +34,7 @@ fixtures illustrate the respective schemas. No export from another search
 service is required to install or operate the plugin. Independently judged cases
 can be evaluated directly using the example below.
 
-Generated weights and click signals must be reviewed before importing through:
+Generated popularity weights must be reviewed before importing through:
 
 ```sh
 php bin/console shopware-meilisearch:search:import-signals \
@@ -43,16 +42,7 @@ php bin/console shopware-meilisearch:search:import-signals \
   --popularity /private/output/reviewed-popularity.json
 ```
 
-`--query-clicks` accepts keyed exact-query feedback, and `--merge-query-clicks`
-retains existing reviewed feedback. Popularity requires an index rebuild;
-keyed exact-query feedback does not.
-
-The click-feedback builder's legacy default key environment name is
-`SHOPWARE_MEILISEARCH_KEY`. For current deployments explicitly pass
-`--key-env SHOPWARE_MEILISEARCH_FEEDBACK_KEY`, populated securely from the same
-feedback secret the plugin uses. The builder does not automatically read the
-plugin's `_FILE` setting. Do not inadvertently use the writer key, expose the
-secret in command arguments or replace it with a public hash.
+The imported popularity weights require an index rebuild.
 
 ## Objective measures and their limits
 
@@ -83,7 +73,7 @@ interval or automatically accept a release.
 Reference-ranking overlap, historical clicked-product recall and synthetic typo
 recall answer different questions. Clicks are biased by the previous ranking;
 high overlap need not imply relevance. Never evaluate a claimed independent
-quality improvement solely on the same query/click data used to create hints.
+quality improvement solely on the same query/click data used to tune ranking.
 Use a held-out time period or separately judged queries where available, and
 state clearly when neither is available. Avoid claiming universal parity from
 historical fitting or a small synthetic sample.

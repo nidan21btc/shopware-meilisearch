@@ -7,8 +7,6 @@
         <parameter key="env(SHOPWARE_MEILISEARCH_KEY_FILE)"></parameter>
         <parameter key="env(SHOPWARE_MEILISEARCH_SEARCH_KEY)"></parameter>
         <parameter key="env(SHOPWARE_MEILISEARCH_SEARCH_KEY_FILE)"></parameter>
-        <parameter key="env(SHOPWARE_MEILISEARCH_FEEDBACK_KEY)"></parameter>
-        <parameter key="env(SHOPWARE_MEILISEARCH_FEEDBACK_KEY_FILE)"></parameter>
         <parameter key="env(SHOPWARE_MEILISEARCH_STATUS_KEY)"></parameter>
         <parameter key="env(SHOPWARE_MEILISEARCH_STATUS_KEY_FILE)"></parameter>
         <parameter key="env(SHOPWARE_MEILISEARCH_CONCURRENCY)">2</parameter>
@@ -19,7 +17,6 @@
         <service id="shopware_meilisearch.status_secret" class="ShopwareMeilisearch\Security\Secret"><argument>%env(string:SHOPWARE_MEILISEARCH_STATUS_KEY)%</argument><argument>%env(string:SHOPWARE_MEILISEARCH_STATUS_KEY_FILE)%</argument></service>
         <service id="shopware_meilisearch.write_secret" class="ShopwareMeilisearch\Security\Secret"><argument>%env(string:SHOPWARE_MEILISEARCH_KEY)%</argument><argument>%env(string:SHOPWARE_MEILISEARCH_KEY_FILE)%</argument></service>
         <service id="shopware_meilisearch.search_secret" class="ShopwareMeilisearch\Security\Secret"><argument>%env(string:SHOPWARE_MEILISEARCH_SEARCH_KEY)%</argument><argument>%env(string:SHOPWARE_MEILISEARCH_SEARCH_KEY_FILE)%</argument></service>
-        <service id="shopware_meilisearch.feedback_secret" class="ShopwareMeilisearch\Security\Secret"><argument>%env(string:SHOPWARE_MEILISEARCH_FEEDBACK_KEY)%</argument><argument>%env(string:SHOPWARE_MEILISEARCH_FEEDBACK_KEY_FILE)%</argument></service>
         <service id="shopware_meilisearch.admission_log_handler" class="Monolog\Handler\RotatingFileHandler">
             <argument>%kernel.logs_dir%/shopware-meilisearch-admission.log</argument><argument>14</argument><argument>200</argument><argument>true</argument><argument>384</argument><argument>true</argument>
         </service>
@@ -43,7 +40,6 @@
             <argument type="service" id="ShopwareMeilisearch\Search\IdentifierFallback"/>
             <argument type="service" id="ShopwareMeilisearch\Search\ReferenceUnitLabels"/>
             <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
-            <argument type="service" id="shopware_meilisearch.feedback_secret"/>
             <argument type="service" id="logger"/>
         </service>
         <service id="ShopwareMeilisearch\Controller\SearchController" public="true">
@@ -104,7 +100,6 @@
         </service>
         <service id="ShopwareMeilisearch\Command\ImportSignalsCommand">
             <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
-            <argument type="service" id="shopware_meilisearch.feedback_secret"/>
             <tag name="console.command"/>
         </service>
         <service id="ShopwareMeilisearch\Command\AuditIndexFieldsCommand">
