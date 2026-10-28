@@ -19,7 +19,7 @@ SHOPWARE_ROOT=/path/to/shopware python3 -m unittest discover -s tests -p 'test_*
 ```
 
 At the 0.2 documentation baseline, the PHP runner passed 221 checks and Python
-unit discovery passed 59 tests. Admission checks separately cover cross-worker
+unit discovery passed 56 tests. Admission checks separately cover cross-worker
 slots, global/IP bursts, untrusted forwarding headers, configured ten-slot shared-IP
 capacity, fail-closed state and credential-file permissions. Counts are evidence
 for that baseline, not a claim that every integration script was executed.

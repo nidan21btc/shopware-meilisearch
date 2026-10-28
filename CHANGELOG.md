@@ -2,6 +2,9 @@
 
 ## 0.2.0
 
+- Remove the provider-specific historical CSV importer and its dedicated tests;
+  retain general-purpose relevance, latency and reviewed-signal tools.
+
 - License the plugin, documentation, tests and supporting tools under MIT; retain
   the prominent experimental, no-warranty and no-support notices.
 

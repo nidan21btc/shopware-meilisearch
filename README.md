@@ -76,8 +76,6 @@ There are no bundled merchant defaults or real evaluation datasets. Configure
 fields, units, suggestions and optional signals for each installation. Keep shop
 exports, credentials, benchmark outputs and screenshots outside this repository.
 
-Shopware icons are referenced through Shopware's icon system. Doofinder is used
-as the name of an optional data-import source; no Doofinder icon or runtime is
-bundled. Third-party components retain their own licenses; this MIT grant does
-not relicense them or grant trademark rights. Review third-party rights before
-public distribution.
+Shopware icons are referenced through Shopware's icon system. Third-party
+components retain their own licenses; this MIT grant does not relicense them
+or grant trademark rights. Review third-party rights before public distribution.

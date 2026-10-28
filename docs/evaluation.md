@@ -14,7 +14,6 @@ exported data or prove that the candidate is as relevant as a reference service.
 
 | Tool(s) in `tools/` | Purpose |
 | --- | --- |
-| `import_doofinder.py` | Normalize search-term, no-result and product CSV exports with explicit engine-to-locale mapping |
 | `export_product_paths.php`, `map_product_references.py` | Associate private reference URLs/identifiers with catalog products |
 | `build_popularity.py`, `build_query_hints.py`, `build_reviewed_hints.py` | Prepare optional language-specific reviewed ranking inputs |
 | `build_query_click_feedback.py` | Generate keyed exact-query/product signals; development partition is the default |
@@ -26,20 +25,15 @@ exported data or prove that the candidate is as relevant as a reference service.
 | `evaluate_judged.py` | Weighted relevance comparison from independently judged result pools |
 | `private_output.py`, `local_http.py` | Protected output creation and local-only HTTP helpers |
 
-Use each script's `--help` and read its input schema. Engine IDs, locale mappings,
-shop hosts, index mappings and paths are explicit rather than merchant defaults.
-Some helpers invoke Shopware code; an explicit test/root path is still required.
+Use each script's `--help` and read its input schema. Shop hosts, locale/index
+mappings and paths are explicit rather than merchant defaults. Some helpers
+invoke Shopware code; an explicit test/root path is still required.
 
-Example import, with synthetic engine identity and private files:
-
-```sh
-python3 tools/import_doofinder.py \
-  --terms /private/input/terms.csv \
-  --no-results /private/input/no-results.csv \
-  --products /private/input/products.csv \
-  --engine synthetic-engine=de-DE \
-  --output /private/output/benchmark.json
-```
+There is no provider-specific historical CSV importer. The evaluation and signal
+builders accept explicitly prepared JSON inputs; their synthetic unit-test
+fixtures illustrate the respective schemas. No export from another search
+service is required to install or operate the plugin. Independently judged cases
+can be evaluated directly using the example below.
 
 Generated hints/weights must be reviewed before importing through:
 
