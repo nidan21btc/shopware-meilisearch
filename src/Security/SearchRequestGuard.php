@@ -16,7 +16,7 @@ final class SearchRequestGuard implements EventSubscriberInterface
     private const ATTRIBUTE = '_shopware_meilisearch_lease';
     private const TTL = 120;
     private const LOCK_WAIT_NS = 100_000_000;
-    public function __construct(private readonly string $directory, private readonly int $concurrency = 2, private readonly int $globalRate = 2, private readonly int $clientRate = 2, private readonly ?AdmissionMetrics $metrics = null) {
+    public function __construct(private readonly string $directory, private int $concurrency = 2, private int $globalRate = 2, private int $clientRate = 2, private readonly ?AdmissionMetrics $metrics = null, private readonly ?DatabaseConfiguration $configuration = null) {
         if ($concurrency < 1 || $concurrency > 10 || $globalRate < 1 || $globalRate > 10 || $clientRate < 1 || $clientRate > 10) throw new \InvalidArgumentException('Search admission limits must be between 1 and 10.');
     }
 
@@ -56,6 +56,12 @@ final class SearchRequestGuard implements EventSubscriberInterface
             while (!flock($lock, LOCK_EX | LOCK_NB)) {
                 if (hrtime(true) >= $deadline) return $this->denied(429, 'limiter_busy');
                 usleep(1000);
+            }
+            $config = $this->configuration?->get();
+            if ($config !== null) {
+                $this->concurrency = $config['concurrency'];
+                $this->globalRate = $config['globalRate'];
+                $this->clientRate = $config['clientRate'];
             }
             if (fstat($lock)['size'] > 262144) throw new \RuntimeException();
             $text = stream_get_contents($lock);

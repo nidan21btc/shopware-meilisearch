@@ -12,6 +12,46 @@ engine and keys → obtain a plugin package → install/configure → build → 
 → verify background jobs → complete acceptance checks. Do not treat a successful
 ZIP upload or a running engine as the end of installation.
 
+## Search connection stored in the database
+
+From version 0.3, the search-service address, socket, request limits and three
+restricted API keys can be stored in a dedicated Shopware database table. Keys
+are **plaintext** in the database and its backups. Access to the connection API
+requires `system_config:update`; the API never returns stored key values. Use
+the connection section in plugin settings to configure or replace them. Blank
+key fields preserve existing keys. The Meilisearch master key must never be
+entered here.
+For obtaining the three application-key values, see [the key retrieval guide](meilisearch-installation.md#2a-obtain-the-three-key-values-for-the-shopware-backend).
+
+Existing installations may migrate the previous environment configuration once:
+
+```sh
+sw plugin:update ShopwareMeilisearch
+sw shopware-meilisearch:config:import-env
+```
+
+The command requires the prior address, limits and all three restricted keys
+to be accessible to CLI PHP. It does not print them or overwrite an existing
+database configuration. After verifying the storefront and index rebuild, remove
+the old `SHOPWARE_MEILISEARCH_*` entries from the environment and regenerate a
+previously compiled environment. The database configuration takes precedence;
+environment fallback is retained for existing installations until migrated.
+Restart long-running workers after a configuration change.
+
+The connection is bound to the server hostname and resolved project path, normalized
+across standard `releases/<release>/htdocs` deployments. A copied database on a
+different hostname or a shop moved to a different path fails closed until its operator
+explicitly enters the destination's own connection and all three keys. Hostnames and
+paths can coincide on different hosts: this is a guard, not a security boundary.
+Before copying production to
+staging, ensure the destination cannot reach the production engine; verify the
+destination keys and rebuild its index. Uninstall without keeping user data removes
+the connection table; the separately managed engine and its keys are not removed.
+
+The legacy environment provisioning steps below remain useful for an initial
+setup and the import command. Once imported and verified, those values need not
+remain in `.env` files or deployment templates.
+
 ## Requirements
 
 - A working Shopware 6.7 storefront, its supported PHP runtime/extensions and
@@ -89,7 +129,9 @@ key stays with the daemon/provisioning administrator. Every intended published
 index follows `shopware_CHANNELUUID_LANGUAGEUUID`; include all pairs you will
 build. Missing language/index permissions will not fix themselves when you enable
 a language in Shopware. Re-provision/review scoped keys deliberately when adding
-pairs. Never rerun the helper into an existing output directory or print keys.
+pairs. Never rerun the helper into an existing output directory. Display key
+values only when needed for manual backend entry, as described in the retrieval
+guide, and only in a private, trusted terminal.
 
 ## 3. Install the plugin and configure its environment
 

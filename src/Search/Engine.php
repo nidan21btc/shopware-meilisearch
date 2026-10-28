@@ -8,15 +8,17 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
 final class Engine
 {
     private bool $versionChecked = false;
-    private readonly string $key;
+    private readonly string|\ShopwareMeilisearch\Security\Secret $key;
     public function __construct(
         private readonly HttpClientInterface $http,
         private readonly string $url,
         string|\ShopwareMeilisearch\Security\Secret $key,
         private readonly string $socketPath = '',
         private readonly string|\ShopwareMeilisearch\Security\Secret $statusKey = '',
+        private readonly ?\ShopwareMeilisearch\Security\DatabaseConfiguration $configuration = null,
+        private readonly string $role = 'index',
     ) {
-        $this->key = (string) $key;
+        $this->key = $key;
     }
 
     public static function indexName(string $salesChannelId, string $languageId): string
@@ -44,10 +46,15 @@ final class Engine
 
     public function request(string $method, string $path, ?array $body = null, bool $allowMissing = false): ?array
     {
-        if ($this->key === '') {
+        $config = $this->configuration?->get();
+        $key = $config === null ? (string) $this->key : $config[$this->role === 'search' ? 'searchKey' : 'indexKey'];
+        $statusKey = $config === null ? (string) $this->statusKey : $config['statusKey'];
+        $urlValue = $config === null ? $this->url : $config['url'];
+        $socketPath = $config === null ? $this->socketPath : $config['socket'];
+        if ($key === '') {
             throw new \RuntimeException('SHOPWARE_MEILISEARCH_KEY is not configured.');
         }
-        $url = parse_url($this->url);
+        $url = parse_url($urlValue);
         if (!is_array($url) || !in_array($url['scheme'] ?? '', ['http', 'https'], true)
             || !in_array($url['host'] ?? '', ['127.0.0.1', '[::1]'], true)
             || isset($url['user']) || isset($url['pass'])
@@ -55,7 +62,7 @@ final class Engine
             throw new \RuntimeException('SHOPWARE_MEILISEARCH_URL must use a local loopback address.');
         }
         $options = [
-            'headers' => ['Authorization' => 'Bearer ' . (($path === '/version' || str_starts_with($path, '/tasks/')) && (string) $this->statusKey !== '' ? (string) $this->statusKey : $this->key)],
+            'headers' => ['Authorization' => 'Bearer ' . (($path === '/version' || str_starts_with($path, '/tasks/')) && $statusKey !== '' ? $statusKey : $key)],
             'timeout' => 3,
             'max_duration' => 10,
             'max_redirects' => 0,
@@ -63,23 +70,23 @@ final class Engine
             // inherited from the PHP process environment.
             'no_proxy' => '*',
         ];
-        if ($this->socketPath !== '') {
+        if ($socketPath !== '') {
             // The socket is opt-in and must already exist. Never let a missing
             // path be interpreted by curl as an interface and silently fall
             // back to a TCP connection.
-            clearstatcache(true, $this->socketPath);
-            if (!str_starts_with($this->socketPath, '/') || strlen($this->socketPath) > 100
-                || str_contains($this->socketPath, "\0") || is_link($this->socketPath)
-                || !file_exists($this->socketPath) || @filetype($this->socketPath) !== 'socket'
+            clearstatcache(true, $socketPath);
+            if (!str_starts_with($socketPath, '/') || strlen($socketPath) > 100
+                || str_contains($socketPath, "\0") || is_link($socketPath)
+                || !file_exists($socketPath) || @filetype($socketPath) !== 'socket'
                 || ($url['scheme'] ?? '') !== 'http') {
                 throw new \RuntimeException('The configured local search socket is unavailable or invalid.');
             }
-            $options['bindto'] = $this->socketPath;
+            $options['bindto'] = $socketPath;
         }
         if ($body !== null) {
             $options['json'] = $body;
         }
-        $response = $this->http->request($method, rtrim($this->url, '/') . '/' . ltrim($path, '/'), $options);
+        $response = $this->http->request($method, rtrim($urlValue, '/') . '/' . ltrim($path, '/'), $options);
         if ($allowMissing && $response->getStatusCode() === 404) {
             return null;
         }

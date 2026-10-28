@@ -3,6 +3,7 @@
     <card>
         <title>Meilisearch search</title>
         <title lang="de-DE">Meilisearch-Suche</title>
+        <component name="sw-meilisearch-connection"><name>connectionControl</name></component>
         <component name="sw-meilisearch-reindex"><name>reindexControl</name></component>
         <input-field type="bool">
             <name>enabled</name>

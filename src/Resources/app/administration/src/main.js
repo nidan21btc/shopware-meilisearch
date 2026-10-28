@@ -31,6 +31,56 @@ Shopware.Module.register('sw-meilisearch-settings', {
     },
 });
 
+Shopware.Component.register('sw-meilisearch-connection', {
+    inject: ['loginService', 'acl'],
+    mixins: [Shopware.Mixin.getByName('notification')],
+    template: `<section class="sw-meilisearch-reindex sw-meilisearch-connection">
+        <h3>Verbindung zum Suchdienst</h3>
+        <p>Diese Einstellungen gelten für den gesamten Shop. Die Schlüssel werden unverschlüsselt in der Datenbank gespeichert und nach dem Speichern nicht angezeigt. Bei einer Shop-Kopie muss die Verbindung neu eingerichtet werden.</p>
+        <p v-if="!configured">Noch keine Verbindung in der Datenbank gespeichert. Alle drei Schlüssel sind erforderlich.</p>
+        <div class="sw-meilisearch-connection__grid">
+            <label>Lokale Adresse <input v-model="form.url" class="sw-meilisearch-config__input" /></label>
+            <label>Unix-Socket (optional) <input v-model="form.socket" class="sw-meilisearch-config__input" /></label>
+        </div>
+        <div class="sw-meilisearch-connection__grid">
+            <label>Gleichzeitige Anfragen <input v-model.number="form.concurrency" type="number" min="1" max="10" class="sw-meilisearch-config__input" /></label>
+            <label>Globale Anfragen pro Sekunde <input v-model.number="form.globalRate" type="number" min="1" max="10" class="sw-meilisearch-config__input" /></label>
+            <label>Anfragen pro IP und Sekunde <input v-model.number="form.clientRate" type="number" min="1" max="10" class="sw-meilisearch-config__input" /></label>
+        </div>
+        <div class="sw-meilisearch-connection__grid">
+            <label>Suchschlüssel <input v-model="form.searchKey" type="password" autocomplete="new-password" :placeholder="configured ? 'Unverändert lassen' : 'Schlüssel eingeben'" class="sw-meilisearch-config__input" /></label>
+            <label>Indexschlüssel <input v-model="form.indexKey" type="password" autocomplete="new-password" :placeholder="configured ? 'Unverändert lassen' : 'Schlüssel eingeben'" class="sw-meilisearch-config__input" /></label>
+            <label>Statusschlüssel <input v-model="form.statusKey" type="password" autocomplete="new-password" :placeholder="configured ? 'Unverändert lassen' : 'Schlüssel eingeben'" class="sw-meilisearch-config__input" /></label>
+        </div>
+        <p>Felder für Schlüssel leer lassen, um bestehende Schlüssel beizubehalten.</p>
+        <sw-button variant="primary" :disabled="busy || !acl.can('system_config:update')" @click="save">Verbindung speichern</sw-button>
+    </section>`,
+    data() { return {busy: false, configured: false, form: {url: 'http://127.0.0.1:7700', socket: '', concurrency: 2, globalRate: 2, clientRate: 2, searchKey: '', indexKey: '', statusKey: ''}}; },
+    created() { if (this.acl.can('system_config:update')) this.refresh(); },
+    methods: {
+        headers() { return {Authorization: `Bearer ${this.loginService.getToken()}`}; },
+        async refresh() {
+            try {
+                const http = Shopware.Application.getContainer('init').httpClient;
+                const {data} = await http.get('_action/shopware-meilisearch/connection', {headers: this.headers()});
+                this.configured = data.configured;
+                if (data.configured) for (const key of ['url', 'socket', 'concurrency', 'globalRate', 'clientRate']) this.form[key] = data[key];
+            } catch (_) { this.createNotificationError({message: 'Verbindungseinstellungen konnten nicht geladen werden.'}); }
+        },
+        async save() {
+            this.busy = true;
+            try {
+                const http = Shopware.Application.getContainer('init').httpClient;
+                await http.post('_action/shopware-meilisearch/connection', {...this.form}, {headers: this.headers()});
+                this.form.searchKey = this.form.indexKey = this.form.statusKey = '';
+                this.configured = true;
+                this.createNotificationSuccess({message: 'Verbindung gespeichert.'});
+            } catch (_) { this.createNotificationError({message: 'Verbindung konnte nicht gespeichert werden. Bitte Adresse, Schlüssel und Limits prüfen.'}); }
+            finally { this.busy = false; }
+        },
+    },
+});
+
 Shopware.Component.register('sw-meilisearch-reindex', {
     inject: ['loginService', 'acl'],
     mixins: [Shopware.Mixin.getByName('notification')],
