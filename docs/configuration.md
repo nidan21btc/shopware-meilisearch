@@ -6,7 +6,9 @@
 > own risk. It is provided "as is", without warranty to the extent permitted by law.
 > No support, maintenance, updates or bug fixes are promised.
 
-Backend settings live under `ShopwareMeilisearch.config`. Use Shopware's normal
+Open the configuration from **Settings → Shop → Meilisearch search** or from the
+extension list. Both links open the same settings, subject to Shopware plugin
+maintenance permission. Backend settings live under `ShopwareMeilisearch.config`. Use Shopware's normal
 sales-channel inheritance deliberately: the selected channel determines which
 settings the indexer and storefront see. Locale codes such as `de-DE` are different
 from language UUIDs; JSON settings use locale codes, index names use UUIDs.

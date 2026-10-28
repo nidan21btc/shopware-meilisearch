@@ -20,7 +20,7 @@ assert(manifest.entryPoints['shopware-meilisearch'].css.some(p => p.split('?')[0
   await page.addScriptTag({path: vue});
   await page.evaluate(() => {
    window.fixture={pending:false, posts:0, allow:true};
-   window.Shopware={Component:{override(){},register(name, config){if(name === 'sw-meilisearch-reindex') window.fixture.component=config;}},Mixin:{getByName(){return {methods:{createNotificationError(){},createNotificationSuccess(){}}};}},Application:{getContainer(){return {httpClient:{get:async()=>({data:{pending:window.fixture.pending,indexedAt:'2026-10-28 14:45:37.685'}}),post:async()=>{window.fixture.posts++;window.fixture.pending=true;return {data:{pending:true,indexedAt:'2026-10-28 14:45:37.685'}};}}};}}};
+   window.Shopware={Module:{register(){}},Component:{override(){},register(name, config){if(name === 'sw-meilisearch-reindex') window.fixture.component=config;}},Mixin:{getByName(){return {methods:{createNotificationError(){},createNotificationSuccess(){}}};}},Application:{getContainer(){return {httpClient:{get:async()=>({data:{pending:window.fixture.pending,indexedAt:'2026-10-28 14:45:37.685'}}),post:async()=>{window.fixture.posts++;window.fixture.pending=true;return {data:{pending:true,indexedAt:'2026-10-28 14:45:37.685'}};}}};}}};
   });
   await page.addScriptTag({content: js});
   await page.evaluate(() => {

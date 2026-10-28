@@ -1,4 +1,30 @@
 /* No external packages or runtime downloads. Loaded as a Shopware administration extension. */
+Shopware.Module.register('sw-meilisearch-settings', {
+    type: 'plugin',
+    name: 'ShopwareMeilisearchSettings',
+    title: 'shopware-meilisearch.settings.title',
+    color: '#9AA8B5',
+    icon: 'regular-search',
+    snippets: {
+        'de-DE': {'shopware-meilisearch': {settings: {title: 'Meilisearch-Suche'}}},
+        'en-GB': {'shopware-meilisearch': {settings: {title: 'Meilisearch search'}}},
+    },
+    routes: {
+        index: {
+            component: 'sw-extension-config',
+            path: 'index',
+            meta: {parentPath: 'sw.settings.index.shop', privilege: 'system.plugin_maintain'},
+            props: {default: () => ({namespace: 'ShopwareMeilisearch'})},
+        },
+    },
+    settingsItem: {
+        group: 'general',
+        to: 'sw.meilisearch.settings.index',
+        icon: 'regular-search',
+        privilege: 'system.plugin_maintain',
+    },
+});
+
 Shopware.Component.register('sw-meilisearch-reindex', {
     inject: ['loginService', 'acl'],
     mixins: [Shopware.Mixin.getByName('notification')],
