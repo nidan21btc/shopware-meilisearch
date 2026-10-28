@@ -191,5 +191,5 @@ drain background workers before uninstalling, then restart them after Shopware
 has rebuilt its container; Shopware's scheduled-task registration removes tasks
 whose plugin is no longer active. The plugin does not delete external indexes
 automatically because the Meilisearch service may be shared. Check its index names
-and ownership before manually removing any external data. This lifecycle has not
-yet been verified end-to-end in a disposable installation for this revision.
+and ownership before manually removing any external data. The retain/delete and
+reinstall paths are exercised by the disposable lifecycle integration test.

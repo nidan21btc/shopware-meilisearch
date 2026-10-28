@@ -89,8 +89,10 @@ changing/deleting test indexes or lock directories.
 | Variants, language, eligibility and pricing | `scheduled_*_integration.php`, `language_scope_integration.php`, `customer_price_context_integration.php`, `stale_availability_integration.php` |
 | Fields and units | `audit_index_fields_integration.php`, `reference_units_integration.php`; explicit fixture UUIDs/custom fields where required |
 | Daily/manual state | `daily_reindex_integration.php`; disposable DB whose name matches `el_search_test_<hex>` |
+| Plugin lifecycle | `lifecycle_integration.php`; disposable installation and `el_search_test_<hex>` DB; installs/uninstalls the plugin and changes plugin configuration |
 | Backend authorization | `admin_reindex_integration.py`; loopback shop and private synthetic account file |
 | Backend interaction | `admin_reindex_browser.cjs`; same account file, Playwright/Chromium |
+| Backend settings | `admin_settings_browser.cjs`; same account file and disposable installation, saves synthetic settings |
 | Storefront interaction | Cart, facets, pagination, retry, remembered query and responsive layout CJS scripts; see each script's environment/arguments |
 
 For the daily/manual state test, set `DATABASE_URL` only in the process environment,
