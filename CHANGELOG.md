@@ -2,6 +2,9 @@
 
 ## 0.2.0
 
+- Add a private vulnerability reporting policy and automated, synthetic PHP,
+  Python, Chromium and Firefox regression checks for the repository.
+
 - Add bounded, process-shared admission statistics and a dedicated private rotating
   log: rejection reasons, admitted/completed requests, sampled peak concurrency
   and server-side mean/max duration, with at most one summary per minute.

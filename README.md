@@ -69,6 +69,11 @@ SHOPWARE_ROOT=/path/to/shopware python3 -m unittest discover -s tests -p 'test_*
 Integration tests require disposable databases, indexes and synthetic accounts.
 Some modify data; read [the test guide](docs/testing.md) before running them.
 
+## Security reports
+
+Please use the private reporting process described in [SECURITY.md](SECURITY.md)
+for vulnerabilities. Do not post sensitive details in public issues.
+
 ## Status and license
 
 This plugin is available under the [MIT License](LICENSE), including its

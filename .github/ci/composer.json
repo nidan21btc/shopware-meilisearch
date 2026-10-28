@@ -1,0 +1,15 @@
+{
+  "name": "shopware-meilisearch/ci-fixture",
+  "description": "Isolated dependencies for plugin regression checks",
+  "type": "project",
+  "license": "MIT",
+  "require": {
+    "php": "~8.4.0",
+    "shopware/core": "6.7.14.0",
+    "shopware/storefront": "6.7.14.0"
+  },
+  "config": {
+    "allow-plugins": false,
+    "sort-packages": true
+  }
+}

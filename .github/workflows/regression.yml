@@ -1,0 +1,55 @@
+name: Regression checks
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
+        with:
+          php-version: '8.4'
+          extensions: ctype, curl, dom, fileinfo, gd, iconv, intl, mbstring, openssl, pdo_mysql, pcntl, sodium, xml, zip
+          tools: composer:v2
+          coverage: none
+      - name: Install isolated Shopware test dependencies
+        run: composer install --working-dir=.github/ci --no-interaction --no-scripts --prefer-dist --no-progress
+      - name: Check PHP source syntax
+        run: find src tests -type f -name '*.php' -print0 | xargs -0 -n1 php -l > /dev/null
+      - name: Run fast regression checks
+        env:
+          SHOPWARE_ROOT: ${{ github.workspace }}/.github/ci
+        run: |
+          php tests/run.php
+          php tests/search_guard.php
+          php tests/admission_metrics.php
+          php tests/defaults.php
+          python3 -m unittest discover -s tests -p 'test_*.py'
+      - name: Check packaged administration asset
+        run: cmp src/Resources/app/administration/src/main.js src/Resources/public/administration/js/shopware-meilisearch.js
+
+  browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install Playwright and browsers
+        run: |
+          npm install --prefix "$RUNNER_TEMP/browser" --no-save --no-package-lock playwright@1.55.0
+          "$RUNNER_TEMP/browser/node_modules/.bin/playwright" install --with-deps chromium firefox
+      - name: Run synthetic browser regressions
+        env:
+          PLAYWRIGHT_MODULE: ${{ runner.temp }}/browser/node_modules/playwright
+        run: |
+          node tests/credentialed_page_url_browser.cjs
+          node tests/remember_query_browser.cjs

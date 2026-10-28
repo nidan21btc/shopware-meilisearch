@@ -3,3 +3,6 @@ __pycache__/
 .env*
 *.csv
 *.jsonl
+
+# Isolated CI dependencies (the manifest and lock file remain tracked)
+.github/ci/vendor/
