@@ -5,6 +5,7 @@ namespace ShopwareMeilisearch\Controller;
 use ShopwareMeilisearch\Search\SearchInput;
 use ShopwareMeilisearch\Search\SearchService;
 use ShopwareMeilisearch\Search\Discovery;
+use ShopwareMeilisearch\Search\PopularSearches;
 use Psr\Log\LoggerInterface;
 use Shopware\Core\PlatformRequest;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
@@ -24,6 +25,7 @@ class SearchController extends StorefrontController
         private readonly SystemConfigService $config,
         private readonly LoggerInterface $logger,
         private readonly \ShopwareMeilisearch\Security\SearchRequestGuard $guard,
+        private readonly PopularSearches $popularSearches,
     ) {
     }
 
@@ -40,6 +42,16 @@ class SearchController extends StorefrontController
         try {
             $result = $this->search->search($input, $context);
             $popular = Discovery::suggestions($this->config->getString('ShopwareMeilisearch.config.popularQueries', $context->getSalesChannelId()), $context->getLanguageInfo()->localeCode);
+            try {
+                if ($request->query->getString('recordPopular') === '1' && $result['total'] > 0 && $input->page === 1 && $input->manufacturers === [] && $input->categories === []) {
+                    $this->popularSearches->record($context->getSalesChannelId(), $context->getLanguageId(), $input->query);
+                }
+                $automatic = $this->popularSearches->suggestions($context->getSalesChannelId(), $context->getLanguageId());
+                if ($automatic !== []) $popular = $automatic;
+            } catch (\Throwable $error) {
+                // Analytics must never prevent a successful product search.
+                $this->logger->warning('Popular search aggregation unavailable', ['exceptionClass' => $error::class]);
+            }
             $response = $this->renderStorefront('@ShopwareMeilisearch/storefront/search/results.html.twig', ['result' => $result, 'input' => $input, 'popularQueries' => $popular]);
         } catch (\Throwable $error) {
             $this->logger->error('Local search failed', ['exceptionClass' => $error::class, 'salesChannelId' => $context->getSalesChannelId(), 'languageId' => $context->getLanguageId()]);
