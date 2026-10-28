@@ -62,8 +62,12 @@ Some modify data; read [the test guide](docs/testing.md) before running them.
 
 ## Status and license
 
-This is an experimental, proprietary plugin. It has been exercised in isolated
-and staging environments; that does not certify every Shopware installation,
+This plugin is available under the [MIT License](LICENSE), including its
+documentation, tests and deployment/evaluation tools. Copyright and license
+notices must be retained when redistributing copies or substantial portions.
+
+It remains experimental. It has been exercised in isolated and staging
+environments; that does not certify every Shopware installation,
 production readiness or equal relevance to another search provider. Deployment
 scripts are examples requiring adaptation. Automatic/manual background indexing
 requires a working scheduled-task runner **and** queue consumer.
@@ -74,4 +78,6 @@ exports, credentials, benchmark outputs and screenshots outside this repository.
 
 Shopware icons are referenced through Shopware's icon system. Doofinder is used
 as the name of an optional data-import source; no Doofinder icon or runtime is
-bundled. Publication remains subject to license and third-party rights review.
+bundled. Third-party components retain their own licenses; this MIT grant does
+not relicense them or grant trademark rights. Review third-party rights before
+public distribution.

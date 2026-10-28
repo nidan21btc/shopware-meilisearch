@@ -105,6 +105,14 @@ Icons are referenced from Shopware's icon system, not copied from a competing
 search overlay. Optional import tooling names its source format; imported data
 is never part of the plugin distribution. Third-party trademarks, dependencies,
 licenses and interface rights still require review before public release.
-`composer.json` currently declares `proprietary`; a public Git repository alone
-would not grant an open-source license. There is no chosen open-source license
-or blanket legal clearance in this project.
+The plugin source, documentation, tests and deployment/evaluation tools are
+licensed under the [MIT License](../LICENSE); `composer.json` declares `MIT`.
+Keep its copyright and license notice when redistributing copies or substantial
+portions. The MIT license includes a warranty disclaimer and liability limitation;
+the prominent experimental/no-support notices remain in effect. It creates no
+promise of support, maintenance, updates or bug fixes.
+
+This grant does not relicense Shopware, Meilisearch, icons or other third-party
+components and does not grant trademark rights. Their own terms remain applicable.
+Selecting MIT for this repository does not replace the third-party rights review
+required before public distribution.

@@ -2,6 +2,9 @@
 
 ## 0.2.0
 
+- License the plugin, documentation, tests and supporting tools under MIT; retain
+  the prominent experimental, no-warranty and no-support notices.
+
 - Prominently state experimental status, absence of warranty and lack of support
   in the README and every documentation guide.
 

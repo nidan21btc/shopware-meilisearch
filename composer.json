@@ -3,7 +3,7 @@
   "description": "Lokale Produktsuche mit Meilisearch und Vollbild-Overlay",
   "version": "0.2.0",
   "type": "shopware-platform-plugin",
-  "license": "proprietary",
+  "license": "MIT",
   "require": {
     "shopware/core": "~6.7.0",
     "shopware/storefront": "~6.7.0"
