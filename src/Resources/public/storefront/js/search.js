@@ -100,7 +100,16 @@ if (dialog && typeof dialog.showModal === 'function') {
         results.setAttribute('aria-busy', 'true');
         status.textContent = dialog.dataset.loading;
         try {
-            const response = await fetch(`${dialog.dataset.endpoint}?${params}`, {
+            // Relative fetch URLs inherit userinfo from a credentialed page URL.
+            // Resolve against the credential-free origin; HTTP Basic auth stays
+            // in the browser's same-origin authentication cache, never in the URL.
+            const endpoint = new URL(dialog.dataset.endpoint, window.location.origin);
+            if (endpoint.origin !== window.location.origin) throw new Error('Invalid search origin');
+            endpoint.username = '';
+            endpoint.password = '';
+            endpoint.search = params.toString();
+            endpoint.hash = '';
+            const response = await fetch(endpoint.href, {
                 signal: controller.signal,
                 headers: {'X-Requested-With': 'XMLHttpRequest'},
                 credentials: 'same-origin',
