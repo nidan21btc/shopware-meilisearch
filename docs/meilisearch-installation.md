@@ -388,6 +388,62 @@ metadata. The master is never a plugin key.
 Generated API keys have no automatic expiration; plan rotation/revocation using
 private key IDs. See [security](security.md).
 
+### 2a. Obtain the three key values for the Shopware backend
+
+The helper above asks Meilisearch to create three restricted application keys and
+stores the returned values in private files. The filenames map to the plugin's
+**Meilisearch search → Search service connection** fields as follows:
+
+| Private file | Shopware field | Purpose |
+| --- | --- | --- |
+| `search` | Search key / Suchschlüssel | Search and inspect settings for the assigned indexes |
+| `index` | Index key / Indexschlüssel | Build and publish the assigned indexes |
+| `status` | Status key / Statusschlüssel | Read the service version and task status |
+
+For model B these files are under `$SEARCH_HOME/credentials/`; for model A they
+are under `/etc/shopware-meilisearch/provisioned/` until copied to the PHP
+identity. `key-ids.json` contains identifiers for managing keys, **not** the
+three values to enter. Do not enter the Meilisearch master key into Shopware.
+
+For an existing installation, first use the three restricted key files already
+created for that **same** Meilisearch instance. If you need to copy a value into
+the backend manually, open a private, trusted terminal on the service host and
+read each role file individually, using the actual protected directory. For
+example, for model B:
+
+```sh
+cat "$SEARCH_HOME/credentials/search"
+cat "$SEARCH_HOME/credentials/index"
+cat "$SEARCH_HOME/credentials/status"
+```
+
+For model A, use the corresponding protected directory and appropriate
+privileges, for example `sudo cat /etc/shopware-meilisearch/provisioned/search`;
+repeat for `index` and `status`.
+
+Run one command at a time, copy the value to the matching password field, and
+save the connection. Use a terminal and clipboard that are not recorded or
+shared: these commands intentionally display credentials. Do not put key values
+in shell arguments, tickets, screenshots, logs, repository files or the master
+key field. The backend does not show the stored values later; empty password
+fields preserve existing values. The application keys are stored **unencrypted**
+in the Shopware database and its backups.
+
+If the role files are unavailable, do not assume that a Meilisearch key-list
+response can recover the key values; behavior varies by release. Provision three
+new restricted keys using step 2 and a **new** protected output directory, then
+enter those values in the backend. The
+[Meilisearch key-list API documentation](https://www.meilisearch.com/docs/reference/api/keys/list-api-keys)
+describes its current behavior. Do not revoke previously used keys until the new
+connection and index rebuild have been verified. Keep production and staging
+keys separate.
+
+When migrating an existing plugin installation that already has protected key
+files configured in its environment, the `shopware-meilisearch:config:import-env`
+command described in [Installation](installation.md#search-connection-stored-in-the-database)
+copies all three values into the database without displaying them. After verifying
+the connection, remove the legacy environment entries as described there.
+
 ### 3. Give PHP only its application-key files
 
 For model A, replace the example Unix account with the actual Shopware web/CLI

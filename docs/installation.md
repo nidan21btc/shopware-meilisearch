@@ -21,6 +21,7 @@ requires `system_config:update`; the API never returns stored key values. Use
 the connection section in plugin settings to configure or replace them. Blank
 key fields preserve existing keys. The Meilisearch master key must never be
 entered here.
+For obtaining the three application-key values, see [the key retrieval guide](meilisearch-installation.md#2a-obtain-the-three-key-values-for-the-shopware-backend).
 
 Existing installations may migrate the previous environment configuration once:
 
@@ -128,7 +129,9 @@ key stays with the daemon/provisioning administrator. Every intended published
 index follows `shopware_CHANNELUUID_LANGUAGEUUID`; include all pairs you will
 build. Missing language/index permissions will not fix themselves when you enable
 a language in Shopware. Re-provision/review scoped keys deliberately when adding
-pairs. Never rerun the helper into an existing output directory or print keys.
+pairs. Never rerun the helper into an existing output directory. Display key
+values only when needed for manual backend entry, as described in the retrieval
+guide, and only in a private, trusted terminal.
 
 ## 3. Install the plugin and configure its environment
 
