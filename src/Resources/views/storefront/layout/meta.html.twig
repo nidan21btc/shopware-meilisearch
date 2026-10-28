@@ -2,7 +2,7 @@
 {% block layout_head_stylesheet %}
     {{ parent() }}
     {% if config('ShopwareMeilisearch.config.enabled') %}
-        <link rel="stylesheet" href="{{ asset('bundles/shopwaremeilisearch/storefront/css/search.css') }}">
+        <link rel="stylesheet" href="{{ asset('bundles/shopwaremeilisearch/storefront/css/search.css') }}?v=2">
         <script type="module" src="{{ asset('bundles/shopwaremeilisearch/storefront/js/search.js') }}"></script>
     {% endif %}
 {% endblock %}
