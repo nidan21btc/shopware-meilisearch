@@ -1,5 +1,11 @@
 # Architecture and implementation map
 
+> [!WARNING]
+> **EXPERIMENTAL · NO WARRANTY · NO SUPPORT**
+> This plugin is experimental and not approved for production use. Use it at your
+> own risk. It is provided "as is", without warranty to the extent permitted by law.
+> No support, maintenance, updates or bug fixes are promised.
+
 ## Request flow
 
 1. Twig extensions in `storefront/base.html.twig` and `storefront/layout/meta.html.twig`

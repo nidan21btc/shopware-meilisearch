@@ -2,6 +2,9 @@
 
 ## 0.2.0
 
+- Prominently state experimental status, absence of warranty and lack of support
+  in the README and every documentation guide.
+
 - Add process-shared configurable concurrency and global/client admission limits,
   private bounded limiter state, fail-closed behavior and overload responses.
 - Separate application search, index-writer, status and keyed-feedback credentials;

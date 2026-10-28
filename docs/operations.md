@@ -1,5 +1,11 @@
 # Operations and recovery
 
+> [!WARNING]
+> **EXPERIMENTAL · NO WARRANTY · NO SUPPORT**
+> This plugin is experimental and not approved for production use. Use it at your
+> own risk. It is provided "as is", without warranty to the extent permitted by law.
+> No support, maintenance, updates or bug fixes are promised.
+
 ## Background workers are required
 
 Daily indexing and the backend rebuild button need two separate Shopware

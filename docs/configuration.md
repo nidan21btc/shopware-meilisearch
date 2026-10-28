@@ -1,5 +1,11 @@
 # Configuration reference
 
+> [!WARNING]
+> **EXPERIMENTAL · NO WARRANTY · NO SUPPORT**
+> This plugin is experimental and not approved for production use. Use it at your
+> own risk. It is provided "as is", without warranty to the extent permitted by law.
+> No support, maintenance, updates or bug fixes are promised.
+
 Backend settings live under `ShopwareMeilisearch.config`. Use Shopware's normal
 sales-channel inheritance deliberately: the selected channel determines which
 settings the indexer and storefront see. Locale codes such as `de-DE` are different

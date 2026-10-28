@@ -1,5 +1,11 @@
 # Search-quality evaluation tools
 
+> [!WARNING]
+> **EXPERIMENTAL · NO WARRANTY · NO SUPPORT**
+> This plugin is experimental and not approved for production use. Use it at your
+> own risk. It is provided "as is", without warranty to the extent permitted by law.
+> No support, maintenance, updates or bug fixes are promised.
+
 The tools operate on explicitly supplied private inputs; merchant reports and
 results are not repository fixtures. They do not provide a legal basis to reuse
 exported data or prove that the candidate is as relevant as a reference service.

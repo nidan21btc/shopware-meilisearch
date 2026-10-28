@@ -1,5 +1,18 @@
 # Shopware Meilisearch
 
+> [!WARNING]
+> **EXPERIMENTELL · KEINE GEWÄHRLEISTUNG · KEIN SUPPORT**
+>
+> Dieses Plugin ist experimentell und nicht als produktionsreif freigegeben.
+> Die Nutzung erfolgt auf eigenes Risiko. Es wird im vorliegenden Zustand
+> ("as is") und ohne Gewährleistung bereitgestellt, soweit gesetzlich zulässig.
+> Es gibt keinen Support und keinen Anspruch auf Wartung, Updates oder Fehlerbehebungen.
+>
+> **EXPERIMENTAL · NO WARRANTY · NO SUPPORT**
+> This experimental plugin is not approved for production use. Use it at your own
+> risk. It is provided "as is", without warranty to the extent permitted by law.
+> No support, maintenance, updates or bug fixes are promised.
+
 Local multilingual product search for Shopware 6.7, with a responsive full-screen
 storefront overlay and a separately hosted Meilisearch service. Version **0.2.0**.
 

@@ -1,5 +1,11 @@
 # Testing and development
 
+> [!WARNING]
+> **EXPERIMENTAL · NO WARRANTY · NO SUPPORT**
+> This plugin is experimental and not approved for production use. Use it at your
+> own risk. It is provided "as is", without warranty to the extent permitted by law.
+> No support, maintenance, updates or bug fixes are promised.
+
 Run from this repository's root. `SHOPWARE_ROOT` points to the directory containing
 Shopware's `vendor/` and `bin/console`, not to its public document root.
 
