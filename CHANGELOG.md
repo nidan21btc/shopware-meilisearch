@@ -1,6 +1,15 @@
 # Changelog
 
-## Unreleased
+## 0.3.1
+
+- Hide the current sales channel's navigation root in category filters, and
+  ignore it in existing filter links while preserving selectable subcategories.
+
+## 0.3.0
+
+- Show automatically aggregated popular searches per language and sales channel,
+  retaining manually configured suggestions as a fallback. Document retention
+  and privacy limitations.
 
 - Store the local search connection, request limits and restricted application
   keys in a private plugin database table, with a privileged admin control.
