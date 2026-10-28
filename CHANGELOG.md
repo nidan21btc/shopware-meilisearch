@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Improve the administration index status layout with Shopware components and responsive actions.
+
 ## 0.2.0
 
 - Add a private vulnerability reporting policy and automated, synthetic PHP,
