@@ -16,8 +16,8 @@
   "extra": {
     "shopware-plugin-class": "ShopwareMeilisearch\\ShopwareMeilisearch",
     "label": {
-      "de-DE": "Shopware lokale Suche",
-      "en-GB": "Shopware local search"
+      "de-DE": "Meilisearch-Suche",
+      "en-GB": "Meilisearch search"
     }
   }
 }
