@@ -294,7 +294,7 @@ Shopware.Component.register('sw-meilisearch-featured-products', {
         <template v-if="parsed.valid">
           <p class="sw-meilisearch-config__help">Diese Produkte erscheinen beim Öffnen der Suche, soweit sie im Verkaufskanal sichtbar sind. Je Sprache können bis zu zehn Produkte ausgewählt werden. Änderungen speichern.</p>
           <label>Sprache auswählen <select v-model="locale" class="sw-meilisearch-config__input" @change="productId = null"><option v-for="item in locales" :key="item" :value="item">{{ item }}</option></select></label>
-          <div v-for="id in products" :key="id" class="sw-meilisearch-config__item sw-meilisearch-config__unit">
+          <div v-for="id in products" :key="id" class="sw-meilisearch-config__item sw-meilisearch-config__unit sw-meilisearch-config__featured-item">
             <sw-entity-single-select entity="product" :value="id" :disabled="true" label="Startprodukt" />
             <sw-button :disabled="disabled" aria-label="Startprodukt entfernen" @click="remove(id)">Entfernen</sw-button>
           </div>

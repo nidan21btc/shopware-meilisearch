@@ -175,6 +175,22 @@
     margin-bottom: 0;
 }
 
+.sw-meilisearch-config__featured-item .sw-entity-single-select {
+    margin-bottom: 0;
+}
+
+.sw-meilisearch-config__featured-item .sw-field__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+}
+
 .sw-meilisearch-config__unit-add > label {
     gap: var(--scale-size-8, 8px);
 }
