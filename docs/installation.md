@@ -196,7 +196,7 @@ their own build requirements.
 
 Open the plugin's **Configuration** from the extension's menu. The technical name
 is `ShopwareMeilisearch`; the label is "Meilisearch-Suche" / "Meilisearch
-search". The configuration card is **Lokale Suche**. Select the intended sales
+search". The configuration card is **Meilisearch-Suche**. Select the intended sales
 channel and understand Shopware's inherited/global setting values before editing.
 
 Start with this minimal configuration:
