@@ -31,8 +31,12 @@ there is no cloud fallback.
 
 | Guide | Contents |
 | --- | --- |
-| [Meilisearch installation](docs/meilisearch-installation.md) | Step-by-step Linux VPS and managed-hosting service setup, keys and acceptance checks |
-| [Plugin installation](docs/installation.md) | Requirements, credentials, plugin installation and upgrades |
+| [Start here: plugin installation](docs/installation.md) | Complete operator walkthrough from prerequisites/package to enabled search and verified background rebuilds |
+| [Compatibility and capacity](docs/compatibility.md) | Declared constraints, recorded versions, storefront scope and limits |
+| [Plugin package](docs/packaging.md) | Reviewed source checkout, installable ZIP layout and transfer checks |
+| [Meilisearch installation](docs/meilisearch-installation.md) | Linux VPS/managed-hosting engine service, protected keys and connection tests |
+| [Background jobs](docs/background-workers.md) | Existing workers, systemd/provider/cron examples and completion checks |
+| [Acceptance checklist](docs/acceptance-checklist.md) | Expected functional, isolation, background and capacity results |
 | [Configuration](docs/configuration.md) | Environment variables, backend settings, fields and synthetic examples |
 | [Architecture](docs/architecture.md) | Request flow, ranking, language handling, indexing and code map |
 | [Deployment decision](docs/deployment-decision.md) | Why Meilisearch remains a separately managed runtime requirement |
@@ -43,6 +47,10 @@ there is no cloud fallback.
 | [Changelog](CHANGELOG.md) | Changes in the current version |
 
 ## Getting started
+
+Follow [Start here: plugin installation](docs/installation.md) in order. Installing
+this package requires a self-hosted classic Shopware Storefront, local engine
+service and deployment/worker access; a backend ZIP upload alone is insufficient.
 
 Prepare an isolated Shopware installation and a supervised local Meilisearch
 service. Provision separate search, index and status credentials, configure their

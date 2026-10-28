@@ -1,0 +1,23 @@
+# EXAMPLE ONLY: adapt User, Group, paths and limits to the Shopware installation.
+# Do not create a duplicate service if the shop already has a task runner.
+[Unit]
+Description=Shopware scheduled-task dispatcher
+After=network.target
+
+[Service]
+Type=simple
+User=shopware
+Group=shopware
+WorkingDirectory=/srv/shopware/current
+Environment=APP_ENV=prod
+Environment=APP_DEBUG=0
+ExecStart=/usr/bin/php bin/console scheduled-task:run --time-limit=60
+Restart=always
+RestartSec=5
+TimeoutStopSec=120
+MemoryMax=256M
+UMask=0022
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

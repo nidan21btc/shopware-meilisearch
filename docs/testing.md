@@ -37,6 +37,20 @@ src/Resources/app/administration/src/main.js
 src/Resources/public/administration/js/shopware-meilisearch.js
 ```
 
+## Credentialed-page browser regression
+
+```sh
+node tests/credentialed_page_url_browser.cjs
+```
+
+This starts a temporary loopback HTTP server with synthetic Basic authentication
+and loads a credentialed page URL in Firefox and Chromium. It verifies initial
+and typed searches, credential-free same-origin request URLs and continued HTTP
+authentication. Both browsers passed this specific regression; no merchant data
+or running Shopware installation is used. Install Playwright and its browsers
+separately; `PLAYWRIGHT_MODULE` may point to an existing module and `TEST_BROWSERS`
+may select a comma-separated subset of `firefox,chromium`.
+
 ## Disposable integration installation
 
 Create a fresh Shopware 6.7 installation with its own database, URL, media/cache
@@ -87,6 +101,10 @@ fixtures, not the original development shop. The full set of prerequisites is
 in each script. The shared loopback HTTP helper is `tools/local_http.py`.
 
 ## Acceptance scope and load
+
+Use the [operator acceptance checklist](acceptance-checklist.md) for manual
+installation checks without running the database-writing developer suite. Record
+the [specific compatibility baseline](compatibility.md) for each installation.
 
 Functional checks should cover every enabled language, exact identifiers,
 misspellings, variants/units, current visibility/stock, customer prices, sorting,

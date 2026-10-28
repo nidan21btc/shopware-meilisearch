@@ -6,6 +6,10 @@
 > own risk. It is provided "as is", without warranty to the extent permitted by law.
 > No support, maintenance, updates or bug fixes are promised.
 
+For a new setup use the [complete plugin installation](installation.md),
+[background job setup](background-workers.md) and [acceptance checklist](acceptance-checklist.md).
+This page is the day-to-day troubleshooting/recovery reference.
+
 ## Background workers are required
 
 Daily indexing and the backend rebuild button need two separate Shopware
@@ -22,7 +26,8 @@ php bin/console messenger:consume async low_priority --time-limit=300 --memory-l
 
 Transport names and limits depend on the installation. Inspect
 `php bin/console debug:messenger` and the shop's messenger configuration before
-adapting the example. The consumer can execute other queued Shopware messages;
+adapting the example. See the [worker setup guide](background-workers.md) for supervised service and
+provider/cron examples. The consumer can execute other queued Shopware messages;
 ensure staging mail, payment and external integrations are configured for testing.
 The example limits are not measured minimums for every catalog. Restart supervised
 workers after deploying source/configuration changes.
@@ -95,6 +100,7 @@ button does not create an unlimited automatic retry loop.
 | Symptom | Check |
 | --- | --- |
 | One client fails while another works | IP budget/shared NAT, HTTP status, request timing, stale assets and that client's network; do not assume different browser means different IP |
+| Assets load but no search request appears | Browser console and current JavaScript asset version; credentialed page URLs must not pass userinfo into fetch URLs. Prefer the browser authentication dialog and redact credentials from diagnostics |
 | HTTP 429 with low host load | Rate limits and client bursts, not only concurrency; verify the compiled environment uses the intended values |
 | HTTP 503 for every query | Engine/socket health, credential roles and file permissions, limiter state, application logs |
 | SSH connectivity works but web search fails | Web-PHP identity, socket traversal, namespace and compiled environment |

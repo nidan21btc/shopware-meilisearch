@@ -2,6 +2,14 @@
 
 ## 0.2.0
 
+- Resolve storefront search URLs against the credential-free origin, preserving
+  same-origin HTTP authentication when a page URL contains userinfo. Cover initial
+  and typed searches with a synthetic Firefox/Chromium regression.
+
+- Complete the operator onboarding documentation with source/ZIP packaging,
+  recorded compatibility, environment and asset setup, supervised worker examples,
+  configuration, initial builds, acceptance checks and upgrade/rollback steps.
+
 - Add a provider-independent Meilisearch installation guide covering verified
   downloads, systemd/managed hosting, role-key ownership and end-to-end checks.
 
