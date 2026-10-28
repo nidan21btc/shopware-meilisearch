@@ -290,6 +290,10 @@ final class SearchService
             $manufacturerFacets = self::precisionFacetCounts($preciseManufacturers, $allManufacturers, $minimumPrecise);
             $categoryFacets = self::precisionFacetCounts($preciseCategories, $allCategories, $minimumPrecise);
         }
+        // Hide only this sales channel's navigation root; other categories and
+        // the indexed data remain unchanged. Apply after merging both facet sets.
+        $navigationRoot = $context->getSalesChannel()->getNavigationCategoryId();
+        $categoryFacets = array_values(array_filter($categoryFacets, static fn (array $facet): bool => $facet['id'] !== $navigationRoot));
         $criteria = new Criteria($candidates);
         $this->applyAvailability($criteria, $context);
         $this->applyFilters($criteria, $input);

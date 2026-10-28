@@ -53,6 +53,15 @@ final readonly class SearchInput
         );
     }
 
+    /** The navigation root is not an actionable category filter. */
+    public function withoutCategory(string $id): self
+    {
+        if (!in_array($id, $this->categories, true)) return $this;
+        return new self($this->query, $this->page, $this->sort, $this->manufacturers,
+            array_values(array_filter($this->categories, static fn (string $category): bool => $category !== $id)),
+            $this->minPrice, $this->maxPrice, $this->includeSimilar);
+    }
+
     private static function ids(array $values): array
     {
         if (count($values) > 20) {

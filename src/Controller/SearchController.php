@@ -38,7 +38,8 @@ class SearchController extends StorefrontController
         if (($denied = $this->guard->enter($request)) !== null) return $denied;
         // Four-letter English typos can themselves be valid short words.
         // Keep the exact matches first, but show their alternatives by default.
-        $input = SearchInput::fromRequest($request, $context->getLanguageInfo()->localeCode === 'en-GB');
+        $input = SearchInput::fromRequest($request, $context->getLanguageInfo()->localeCode === 'en-GB')
+            ->withoutCategory($context->getSalesChannel()->getNavigationCategoryId());
         try {
             $result = $this->search->search($input, $context);
             $popular = Discovery::suggestions($this->config->getString('ShopwareMeilisearch.config.popularQueries', $context->getSalesChannelId()), $context->getLanguageInfo()->localeCode);
