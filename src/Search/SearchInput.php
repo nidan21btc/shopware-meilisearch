@@ -41,9 +41,6 @@ final readonly class SearchInput
         if ($request->query->has('minPrice') || $request->query->has('maxPrice')) throw new BadRequestHttpException('Price range filters are not supported.');
         $min = null;
         $max = null;
-        if ($min !== null && $max !== null && $min > $max) {
-            throw new BadRequestHttpException('Invalid price range.');
-        }
 
         return new self(
             trim($query), max(1, min(500, $request->query->getInt('page', 1))), $sort,
@@ -76,18 +73,4 @@ final readonly class SearchInput
         return array_values(array_unique($values));
     }
 
-    private static function price(string $value): ?float
-    {
-        if ($value === '') {
-            return null;
-        }
-        // Shopware's aggregated prices can have four fractional digits. The
-        // range input uses the actual minimum as its step base, so it can
-        // submit the same precision even though its step is one cent.
-        if (!preg_match('/^\d{1,9}(?:\.\d{1,4})?$/D', $value)) {
-            throw new BadRequestHttpException('Invalid price.');
-        }
-
-        return (float) $value;
-    }
 }

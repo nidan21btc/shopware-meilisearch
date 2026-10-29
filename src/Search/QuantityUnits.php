@@ -44,7 +44,7 @@ final class QuantityUnits
         if (abs($amount - (float) $number) > max(1.0, abs($amount)) * 2e-15) return [];
         $symbol = $units[$unitId]['symbol'];
         $tokens = [$number . ' ' . $symbol, $number . $symbol];
-        $other = match ($symbol) { 'ml' => 'l', 'l' => 'ml', 'g' => 'kg', 'kg' => 'g' };
+        $other = match ($symbol) { 'ml' => 'l', 'l' => 'ml', 'g' => 'kg', 'kg' => 'g', default => throw new \UnhandledMatchError() };
         $converted = self::shift($number, in_array($symbol, ['l', 'kg'], true) ? 3 : -3);
         $fraction = explode('.', $converted, 2)[1] ?? '';
         // Queries accept at most eight decimal places; never round a tiny

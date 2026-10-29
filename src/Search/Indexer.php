@@ -4,6 +4,7 @@ namespace ShopwareMeilisearch\Search;
 
 use Shopware\Core\Content\Product\Aggregate\ProductVisibility\ProductVisibilityDefinition;
 use Shopware\Core\Content\Product\SalesChannel\ProductAvailableFilter;
+use Shopware\Core\Content\Product\SalesChannel\SalesChannelProductEntity;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Sorting\FieldSorting;
 use Shopware\Core\System\SalesChannel\Entity\SalesChannelRepository;
@@ -92,6 +93,9 @@ final class Indexer
             $this->parents->load($products->getEntities(), $context);
             $documents = [];
             foreach ($products->getEntities() as $product) {
+                if (!$product instanceof SalesChannelProductEntity) {
+                    throw new \UnexpectedValueException('Expected a sales channel product during indexing.');
+                }
                 $document = $this->builder->build($product, $context->getLanguageId(), $fields, $quantityUnits);
                 if ($document !== null) {
                     $documents[] = $document;

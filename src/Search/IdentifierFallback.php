@@ -66,7 +66,7 @@ final class IdentifierFallback
             }
             // Database collations can be accent-insensitive. Check the actual
             // selected identifier again before adding an untranslated product.
-            if ($exact && (!is_string($name) || trim($name) === '') && is_string($number) && trim($number) !== '') {
+            if ($exact && (!is_string($name) || trim($name) === '') && trim($number) !== '') {
                 $result[$product->getId()] = $number;
             }
         }
