@@ -183,3 +183,14 @@ Use an isolated shop and representative queries. Snapshots contain product IDs
 and facet data: do not commit them or share them; remove them after the comparison.
 These comparisons complement synthetic regression cases and cannot cover every
 possible search or concurrent change to a shop's catalog.
+
+## Short-query precision and filters
+
+In a local test shop with a four-letter query that has both precise and typo
+matches, use the read-only regression below. It checks category counts, result
+subsets, pagination and the explicit similar-results option. Choose a query and
+category from the test catalog; do not put merchant identifiers in the repository.
+
+```sh
+python3 tests/short_precision_filter_integration.py --url http://127.0.0.1 --host shop.test --query 'test' --category CATEGORY_UUID
+```
