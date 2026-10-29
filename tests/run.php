@@ -442,13 +442,19 @@ $settingsClient = new MockHttpClient(static function () use (&$settingsRequests)
     return new MockResponse('["name","description"]');
 });
 $settingsEngine = new Engine($settingsClient, 'http://127.0.0.1:7700', 'test-key');
-$publishedSettings = new \ShopwareMeilisearch\Search\PublishedSearchFields($settingsEngine, new \Symfony\Component\Cache\Adapter\ArrayAdapter());
+$settingsCache = new \Symfony\Component\Cache\Adapter\ArrayAdapter();
+$publishedSettings = new \ShopwareMeilisearch\Search\PublishedSearchFields($settingsEngine, $settingsCache);
 $fetched = false;
 check($publishedSettings->get('index-a', $fetched) === ['name','description'] && $fetched && $settingsRequests === 1, 'Read published fields on cache miss');
 check($publishedSettings->get('index-a', $fetched) === ['name','description'] && !$fetched && $settingsRequests === 1, 'Warm published fields do not contact engine');
 $publishedSettings->invalidate('index-a');
 check($publishedSettings->get('index-a', $fetched) === ['name','description'] && $fetched && $settingsRequests === 2, 'Index publication invalidates cached fields');
 check($publishedSettings->get('index-b', $fetched) === ['name','description'] && $fetched && $settingsRequests === 3, 'Published field caches are isolated by index');
+$publishedSettings->publish('index-a', ['name', 'folded.name']);
+check($publishedSettings->get('index-a', $fetched) === ['name', 'folded.name'] && !$fetched && $settingsRequests === 3, 'Publishing warms new fields without an engine request');
+$publishedExpiry = $settingsCache->getItem('shopware_meilisearch_fields_' . hash('sha256', 'index-a'))->getMetadata()['expiry'] ?? 0;
+check($publishedExpiry >= time() + 86390 && $publishedExpiry <= time() + 86410, 'Published fields expire after approximately 24 hours');
+check($publishedSettings->get('index-b', $fetched) === ['name', 'description'] && !$fetched, 'Publishing preserves other index caches');
 $settingsFaultCount = 0;
 $faultClient = new MockHttpClient(static function () use (&$settingsFaultCount) {
     ++$settingsFaultCount;
