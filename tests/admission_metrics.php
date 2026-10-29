@@ -69,23 +69,28 @@ try {
   $workers=[];
   for($i=0;$i<5;$i++) {
    $pid=pcntl_fork();
+   if($pid===-1)break;
    if($pid===0) {
     $parallel=new SearchRequestGuard($root.'/parallel',5,10,10,$metrics);
-    $q=$request('192.0.2.50');$until=microtime(true)+5;
+    $q=$request('192.0.2.50');$until=hrtime(true)+30_000_000_000;
     $denied=$parallel->enter($q);
-    if($denied!==null)exit(2);
+    if($denied!==null){fwrite(STDERR,"Parallel worker $i denied: HTTP ".$denied->getStatusCode()."\n");exit(2);}
     touch($root.'/ready-'.$i);
-    while(!is_file($root.'/release') && microtime(true)<$until)usleep(1000);
+    do {clearstatcache(true, $root.'/release'); if(is_file($root.'/release'))break; usleep(1000);} while(hrtime(true)<$until);
     $parallel->release($q);exit(is_file($root.'/release') ? 0 : 3);
    }
    $workers[]=$pid;
   }
-  $until=microtime(true)+5;
-  while(count(glob($root.'/ready-*'))<5 && microtime(true)<$until)usleep(1000);
+  // Workers must outlive the parent's full readiness deadline, including on slow CI hosts.
+  $until=hrtime(true)+10_000_000_000;
+  while(count($workers)===5 && count(glob($root.'/ready-*'))<5 && hrtime(true)<$until)usleep(1000);
   $ready=count(glob($root.'/ready-*'))===5;
-  $extra=(new SearchRequestGuard($root.'/parallel',5,10,10,$metrics))->enter($request('192.0.2.51'));
+  $extra=$ready ? (new SearchRequestGuard($root.'/parallel',5,10,10,$metrics))->enter($request('192.0.2.51')) : null;
   touch($root.'/release');
-  foreach($workers as $pid){pcntl_waitpid($pid,$status);check(pcntl_wexitstatus($status)===0,'Parallel worker finished');}
+  $failed=[];
+  foreach($workers as $pid){$waited=pcntl_waitpid($pid,$status);if($waited!==$pid || !pcntl_wifexited($status) || pcntl_wexitstatus($status)!==0)$failed[]=$pid.':'.($waited===$pid && pcntl_wifexited($status) ? pcntl_wexitstatus($status) : 'abnormal');}
+  check(count($workers)===5,'Could not fork all parallel workers');
+  check($failed===[],'Parallel workers failed (PID:exit): '.implode(', ', $failed));
   check($ready && $extra?->getStatusCode()===429,'Five workers fit and sixth is rejected');
   check(json_decode(file_get_contents($root.'/metrics/metrics.json'),true)['peak']===5,'Sampled peak across five worker processes');
  }
