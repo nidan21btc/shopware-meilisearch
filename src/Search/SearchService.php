@@ -123,8 +123,8 @@ final class SearchService
         }
         // Preserve a precise view for short words while allowing similar hits.
         $minimumPrecise = $context->getLanguageInfo()->localeCode === 'en-GB' && PartialMatches::terms($input->query) === [] ? 1 : SearchInput::PAGE_SIZE;
-        $preciseIds = ShortQueryPrecision::exactIds($query, $hits, $minimumPrecise)
-            ?? MultiwordPrecision::strongIds($input->query, $hits, $minimumPrecise);
+        $shortPreciseIds = ShortQueryPrecision::exactIds($query, $hits, $minimumPrecise);
+        $preciseIds = $shortPreciseIds ?? MultiwordPrecision::strongIds($input->query, $hits, $minimumPrecise);
         $indexedUnnamedIds = [];
         foreach ($hits as $hit) {
             if (isset($hit['id']) && is_string($hit['id']) && preg_match('/^[a-f0-9]{32}$/D', $hit['id'])) {
@@ -286,14 +286,21 @@ final class SearchService
             $preciseCriteria = new Criteria($preciseIds);
             $preciseCriteria->setLimit(self::MAX_CANDIDATES);
             $this->criteria->applyAvailability($preciseCriteria, $context);
-            $this->criteria->applyFilters($preciseCriteria, $input);
+            // For short words decide precision before customer filters, so a
+            // category cannot silently reintroduce typo matches. Multiword
+            // expansion retains its existing filter-dependent behavior.
+            if ($shortPreciseIds === null) $this->criteria->applyFilters($preciseCriteria, $input);
             $eligible = $this->products->searchIds($preciseCriteria, $context)->getIds();
-            if ($hasPriceFilter) $eligible = self::filterByDisplayedPrice($eligible, $displayedPrices ?? [], $input);
+            if ($shortPreciseIds === null && $hasPriceFilter) $eligible = self::filterByDisplayedPrice($eligible, $displayedPrices ?? [], $input);
             $preciseSet = array_fill_keys($preciseIds, true);
             $preciseFamilies = array_intersect_key($familyMap, $preciseSet);
             $preciseParents = self::matchedParents($preciseFamilies, $familyPrimaryIds);
-            $filteredPreciseParents = self::matchedParents($preciseFamilies, $familyPrimaryIds, array_fill_keys($eligible, true));
-            $hasSimilar = count(self::withoutMatchedParents($eligible, $filteredPreciseParents)) >= $minimumPrecise;
+            $eligiblePrecise = array_fill_keys($eligible, true);
+            $availablePreciseParents = self::matchedParents($preciseFamilies, $familyPrimaryIds, $eligiblePrecise);
+            $hasSimilar = count(self::withoutMatchedParents($eligible, $availablePreciseParents)) >= $minimumPrecise;
+            $filteredPreciseParents = $shortPreciseIds === null ? $availablePreciseParents
+                : self::matchedParents($preciseFamilies, $familyPrimaryIds,
+                    $eligibleSet === null ? $eligiblePrecise : array_intersect_key($eligiblePrecise, $eligibleSet));
             if ($hasSimilar && !$input->includeSimilar) {
                 $candidates = array_values(array_filter($candidates, static fn (string $id): bool => isset($preciseSet[$id])));
                 $parentIds = $preciseParents;
@@ -310,7 +317,7 @@ final class SearchService
 
         [$manufacturerFacets, $categoryFacets] = $this->facets->calculate(
             $input, $hasFilters, $allCandidates, $familyMap, $familyPrimaryIds, $displayedPrices ?? [],
-            $preciseIds, $hasSimilar, $unrestrictedCandidates, $minimumPrecise, $context,
+            $shortPreciseIds === null ? $preciseIds : null, $hasSimilar, $unrestrictedCandidates, $minimumPrecise, $context,
         );
         $criteria = new Criteria($candidates);
         $this->criteria->applyAvailability($criteria, $context);
