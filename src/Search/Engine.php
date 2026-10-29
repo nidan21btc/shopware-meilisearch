@@ -78,7 +78,7 @@ final class Engine
             if (!str_starts_with($socketPath, '/') || strlen($socketPath) > 100
                 || str_contains($socketPath, "\0") || is_link($socketPath)
                 || !file_exists($socketPath) || @filetype($socketPath) !== 'socket'
-                || ($url['scheme'] ?? '') !== 'http') {
+                || $url['scheme'] !== 'http') {
                 throw new \RuntimeException('The configured local search socket is unavailable or invalid.');
             }
             $options['bindto'] = $socketPath;

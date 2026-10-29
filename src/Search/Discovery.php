@@ -5,10 +5,6 @@ namespace ShopwareMeilisearch\Search;
 /** Curated initial suggestions, replaceable per locale through plugin settings. */
 final class Discovery
 {
-    private const DEFAULTS = [];
-
-    private const FEATURED_DEFAULTS = [];
-
     public static function suggestions(string $json, string $locale): array
     {
         try {
@@ -16,7 +12,7 @@ final class Discovery
         } catch (\JsonException) {
             return [];
         }
-        $entries = is_array($byLanguage) ? ($byLanguage[$locale] ?? self::DEFAULTS[$locale] ?? []) : [];
+        $entries = is_array($byLanguage) ? ($byLanguage[$locale] ?? []) : [];
         if (!is_array($entries) || !array_is_list($entries)) {
             return [];
         }
@@ -32,7 +28,7 @@ final class Discovery
         } catch (\JsonException) {
             return [];
         }
-        $entries = is_array($byLanguage) ? ($byLanguage[$locale] ?? self::FEATURED_DEFAULTS[$locale] ?? []) : [];
+        $entries = is_array($byLanguage) ? ($byLanguage[$locale] ?? []) : [];
         if (!is_array($entries) || !array_is_list($entries)) {
             return [];
         }

@@ -2,7 +2,6 @@
 
 namespace ShopwareMeilisearch\Search;
 
-use Shopware\Core\Checkout\Cart\Price\Struct\CalculatedPrice;
 use Shopware\Core\Content\Product\DataAbstractionLayer\VariantListingConfig;
 use Shopware\Core\Content\Product\SalesChannel\SalesChannelProductEntity;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
@@ -58,13 +57,12 @@ final class ReferenceUnitLabels
         $price = $product->getCalculatedPrices()->last() ?? $product->getCalculatedPrice();
         $unitId = $product->getUnitId();
         $listing = $product->getVariantListingConfig();
-        if ($product->getParentId() === null && $listing instanceof VariantListingConfig && $listing->getDisplayParent()
-            && $product->getCalculatedCheapestPrice() instanceof CalculatedPrice) {
+        if ($product->getParentId() === null && $listing instanceof VariantListingConfig && $listing->getDisplayParent()) {
             $price = $product->getCalculatedCheapestPrice();
             // The cheapest family member may use a different physical unit.
             $unitId = $product->getCheapestPrice()?->getUnitId() ?? $unitId;
         }
-        $reference = $price?->getReferencePrice();
+        $reference = $price->getReferencePrice();
         if ($reference === null || $unitId === null) return null;
         return ['id'=>$unitId, 'amount'=>$reference->getReferenceUnit(), 'fallback'=>$reference->getUnitName()];
     }

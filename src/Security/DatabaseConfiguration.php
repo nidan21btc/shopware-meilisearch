@@ -55,7 +55,7 @@ final class DatabaseConfiguration
         }
         $url = parse_url($config['url']);
         if (!is_array($url) || !in_array($url['scheme'] ?? '', ['http', 'https'], true) || !in_array($url['host'] ?? '', ['127.0.0.1', '[::1]'], true) || isset($url['user']) || isset($url['pass']) || isset($url['query']) || isset($url['fragment'])) throw new \InvalidArgumentException('Search origin must be local.');
-        if ($config['socket'] !== '' && (!str_starts_with($config['socket'], '/') || strlen($config['socket']) > 100 || ($url['scheme'] ?? '') !== 'http')) throw new \InvalidArgumentException('Invalid search socket.');
+        if ($config['socket'] !== '' && (!str_starts_with($config['socket'], '/') || strlen($config['socket']) > 100 || $url['scheme'] !== 'http')) throw new \InvalidArgumentException('Invalid search socket.');
         foreach (['concurrency', 'globalRate', 'clientRate'] as $key) {
             if (!isset($config[$key]) || !is_int($config[$key]) || $config[$key] < 1 || $config[$key] > 10) throw new \InvalidArgumentException('Search limits must be between 1 and 10.');
         }
