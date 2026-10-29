@@ -73,6 +73,12 @@ final class QuantityUnits
         return self::canonicalKey($number, strtolower($matches[0][2]));
     }
 
+    public static function isStandalone(string $query): bool
+    {
+        return self::queryKey($query) !== null
+            && (bool) preg_match('/^\s*[0-9]{1,9}(?:[.,][0-9]{1,8})?\s*(?:ml|kg|l|g)\s*$/iuD', $query);
+    }
+
     private static function normalizeNumber(array $parts): string
     {
         $whole = ltrim($parts[0], '0');

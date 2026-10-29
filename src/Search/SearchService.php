@@ -33,59 +33,101 @@ final class SearchService
         private readonly ReferenceUnitLabels $referenceUnitLabels,
         private readonly SystemConfigService $config,
         private readonly LoggerInterface $logger,
+        private readonly PublishedSearchFields $publishedFields,
+        private readonly SearchRequest $searchRequest,
     ) {
     }
 
     public function search(SearchInput $input, SalesChannelContext $context): array
     {
-        $result = $this->searchOnce($input, $context);
-        if ($result['total'] > 0) return $result;
-
-        // A stale, unavailable or filtered index hit is not a visible result.
-        // Only try the same-language spelling alternative after all Shopware
-        // visibility and customer filters have been applied.
-        $alternate = OrthographicFallback::german($input->query, $context->getLanguageInfo()->localeCode);
-        if ($alternate === null) return $result;
-        try {
-            $corrected = new SearchInput($alternate, $input->page, $input->sort, $input->manufacturers,
-                $input->categories, $input->minPrice, $input->maxPrice, $input->includeSimilar);
-            $fallback = $this->searchOnce($corrected, $context);
-            if ($fallback['total'] > 0) {
-                $fallback['orthographyFallback'] = true;
-                return $fallback;
-            }
-        } catch (\Throwable) {
-            // A failed optional retry must not replace the original response.
-        }
-        return $result;
+        return $this->searchOnce($input, $context);
     }
 
     private function searchOnce(SearchInput $input, SalesChannelContext $context): array
     {
         $index = Engine::indexName($context->getSalesChannelId(), $context->getLanguageId());
-        // Retrieve IDs and the missing-name marker only. Context-dependent
-        // filters, prices and sorting belong to Shopware.
+        // The index settings are cached and invalidated when a new index is published.
+        $settingsRequested = false;
+        $published = null;
+        try {
+            $published = $this->publishedFields->get($index, $settingsRequested);
+        } catch (\Throwable $error) {
+            $this->logger->warning('Published search fields unavailable', ['exceptionClass' => $error::class]);
+        }
+        $engineCalls = $settingsRequested ? 1 : 0;
+        $hasFolded = is_array($published) && (bool) array_filter($published, static fn (string $f): bool => str_starts_with($f, 'folded.'));
+        $isGerman = (bool) preg_match('/^de(?:-|$)/i', $context->getLanguageInfo()->localeCode);
+        $phrase = PartialMatches::quantityPhrase($input->query);
+        $query = $phrase ?? $input->query;
+        if ($hasFolded && $isGerman && !IdentifierFallback::isCode($input->query)) $query = SearchFold::text($query);
         $needsTypoDetails = $input->query !== '';
-        $response = $this->engine->request('POST', '/indexes/' . $index . '/search', [
-            'q' => $input->query,
-            'page' => 1,
-            'hitsPerPage' => self::MAX_CANDIDATES,
+        $payload = [
+            'q' => $query, 'page' => 1, 'hitsPerPage' => self::MAX_CANDIDATES,
             'attributesToRetrieve' => ['id', 'unnamed', 'quantityKey'],
-            'showRankingScoreDetails' => $needsTypoDetails,
-            // Keep rare distinguishing terms if a multi-word query has no
-            // full match.
-            'matchingStrategy' => 'frequency',
-        ]);
+            'showRankingScoreDetails' => $needsTypoDetails, 'matchingStrategy' => 'frequency',
+        ];
+        if ($input->query !== '' && ($published === null || !in_array('*', $published, true))) {
+            try {
+                $fields = IndexFields::forLocale($this->config->getString('ShopwareMeilisearch.config.indexFields', $context->getSalesChannelId()),
+                    $this->config->getString('ShopwareMeilisearch.config.indexFieldsByLanguage', $context->getSalesChannelId()), $context->getLanguageInfo()->localeCode);
+                if (in_array('name', $fields, true)) $fields[] = 'nameHyphenAliases';
+                if ($hasFolded && $isGerman && SearchFold::usesAliases($input->query)) {
+                    foreach ($fields as $field) if (SearchFold::supports($field) && $field !== 'nameHyphenAliases') $fields[] = 'folded.' . str_replace('.', '__', $field);
+                }
+                $restricted = $published === null ? $fields : array_values(array_intersect($fields, $published));
+                // If settings are unavailable, the precise 400 retry handles a stale config.
+                if ($restricted !== []) $payload['attributesToSearchOn'] = $restricted;
+                elseif ($published !== null) $payload['attributesToSearchOn'] = $published;
+            } catch (\Throwable $error) {
+                $this->logger->warning('Local search field restriction was skipped', ['exceptionClass' => $error::class]);
+            }
+        }
+        $response = $this->searchRequest->execute($index, $payload, $phrase ?? $input->query, $engineCalls);
         $candidates = [];
         $quantityKey = QuantityUnits::queryKey($input->query);
         $hits = $response['hits'] ?? [];
         if ($needsTypoDetails) {
             $hits = TypoRelevance::reorder($hits);
-            $hits = QuantityRelevance::reorder($hits, $quantityKey);
+            $phrase = PartialMatches::quantityPhrase($input->query);
+            if ($phrase !== null && $quantityKey !== null) {
+                if (QuantityRelevance::usesPreciseCombined($phrase)) $hits = QuantityRelevance::preciseCombined($hits);
+                try {
+                    $relevant = array_filter(array_slice($hits, 0, 1000), static fn (array $hit): bool => ($hit['quantityKey'] ?? null) === $quantityKey);
+                    $ids = array_values(array_filter(array_column($relevant, 'id'), static fn ($id) => is_string($id) && preg_match('/^[a-f0-9]{32}$/D', $id)));
+                    $names = $this->currentNames->names($ids, $context);
+                    $labels = array_map(static fn (string $name): array => [$name], $names);
+                    $allowedFields = $payload['attributesToSearchOn'] ?? $published ?? [];
+                    if ($ids !== [] && (in_array('manufacturer', $allowedFields, true) || in_array('categories', $allowedFields, true))) {
+                        $criteria = (new Criteria($ids))->setLimit(1000);
+                        if (in_array('manufacturer', $allowedFields, true)) $criteria->addAssociation('manufacturer.translations');
+                        if (in_array('categories', $allowedFields, true)) {
+                            $criteria->addAssociation('categories.translations');
+                            $criteria->addAssociation('categoriesRo.translations');
+                        }
+                        foreach ($this->products->search($criteria, $context)->getEntities() as $product) {
+                            $id = $product->getId();
+                            if (in_array('manufacturer', $allowedFields, true)) {
+                                $name = LanguageText::field($product->getManufacturer(), $context->getLanguageId(), 'name');
+                                if (is_string($name) && $name !== '') $labels[$id][] = $name;
+                            }
+                            if (in_array('categories', $allowedFields, true)) foreach ([$product->getCategories(), $product->getCategoriesRo()] as $categories) foreach ($categories ?? [] as $category) {
+                                if (!$category->getActive()) continue;
+                                $name = LanguageText::field($category, $context->getLanguageId(), 'name');
+                                if (is_string($name) && $name !== '') $labels[$id][] = $name;
+                            }
+                        }
+                    }
+                    $hits = QuantityRelevance::promoteCombined($hits, $quantityKey, $labels, $phrase);
+                } catch (\Throwable $error) {
+                    $this->logger->warning('Local quantity ranking was skipped', ['exceptionClass' => $error::class]);
+                }
+            } elseif (QuantityUnits::isStandalone($input->query)) {
+                $hits = QuantityRelevance::reorder($hits, $quantityKey);
+            }
         }
         // Preserve a precise view for short words while allowing similar hits.
         $minimumPrecise = $context->getLanguageInfo()->localeCode === 'en-GB' && PartialMatches::terms($input->query) === [] ? 1 : SearchInput::PAGE_SIZE;
-        $preciseIds = ShortQueryPrecision::exactIds($input->query, $hits, $minimumPrecise)
+        $preciseIds = ShortQueryPrecision::exactIds($query, $hits, $minimumPrecise)
             ?? MultiwordPrecision::strongIds($input->query, $hits, $minimumPrecise);
         $indexedUnnamedIds = [];
         foreach ($hits as $hit) {
@@ -105,7 +147,7 @@ final class SearchService
         $directUnnamed = [];
         if (IdentifierFallback::isCode($input->query)) {
             try {
-                $directUnnamed = $this->identifierFallback->find($input->query, $index, $context);
+                $directUnnamed = $published !== null ? $this->identifierFallback->find($input->query, $index, $context, $published) : [];
                 $unnamed += $directUnnamed;
                 $candidates = array_values(array_unique(array_merge(array_keys($directUnnamed), $candidates)));
             } catch (\Throwable $error) {
@@ -126,18 +168,10 @@ final class SearchService
         $broadened = false;
         $terms = PartialMatches::terms($input->query);
         $quantityExpansion = false;
-        if ($terms === [] && ($phrase = PartialMatches::withoutTrailingQuantity($input->query)) !== null) {
-            try {
-                // Inspect the published index, not a configuration change that
-                // may still be waiting for an index rebuild.
-                $searchable = $this->engine->request('GET', '/indexes/' . $index . '/settings/searchable-attributes');
-                if (is_array($searchable) && !in_array('*', $searchable, true) && !in_array('quantity', $searchable, true)) {
-                    $terms = [$phrase];
-                    $quantityExpansion = true;
-                }
-            } catch (\Throwable $error) {
-                $this->logger->warning('Local quantity fallback was skipped', ['exceptionClass' => $error::class]);
-            }
+        if ($terms === [] && ($trailingPhrase = PartialMatches::withoutTrailingQuantity($input->query)) !== null
+            && $published !== null && !in_array('*', $published, true) && !in_array('quantity', $published, true)) {
+            $terms = [$trailingPhrase];
+            $quantityExpansion = true;
         }
         if ($terms !== [] && count($candidates) >= SearchInput::PAGE_SIZE) {
             try {
@@ -150,11 +184,14 @@ final class SearchService
                 $terms = [];
             }
         }
-        if ($terms !== []) {
-            $queries = array_map(static fn (string $term): array => [
-                'indexUid' => $index, 'q' => $term, 'limit' => self::MAX_CANDIDATES,
-                'attributesToRetrieve' => ['id', 'unnamed'], 'matchingStrategy' => $quantityExpansion ? 'all' : 'frequency',
-            ], $terms);
+        if ($terms !== [] && $engineCalls < 2) {
+            $queries = array_map(static function (string $term) use ($index, $quantityExpansion, $hasFolded, $isGerman, $payload): array {
+                $query = ['indexUid' => $index, 'q' => $hasFolded && $isGerman ? SearchFold::text($term) : $term,
+                    'limit' => self::MAX_CANDIDATES, 'attributesToRetrieve' => ['id', 'unnamed'], 'matchingStrategy' => $quantityExpansion ? 'all' : 'frequency'];
+                // Apply the same field restriction to partial queries.
+                if (isset($payload['attributesToSearchOn']) && !SearchFold::usesAliases($term)) $query['attributesToSearchOn'] = array_values(array_filter($payload['attributesToSearchOn'], static fn (string $f): bool => !str_starts_with($f, 'folded.')));
+                return $query;
+            }, $terms);
             try {
                 $partial = $this->engine->request('POST', '/multi-search', ['queries' => $queries]);
                 $lists = array_map(static fn (array $result): array => $result['hits'] ?? [], $partial['results'] ?? []);

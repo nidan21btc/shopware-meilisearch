@@ -19,6 +19,7 @@ final class Indexer
         private readonly ParentTranslations $parents,
         private readonly SystemConfigService $config,
         private readonly string $lockDirectory,
+        private readonly ?PublishedSearchFields $publishedFields = null,
     ) {
     }
 
@@ -106,6 +107,8 @@ final class Indexer
             $this->engine->mutate('POST', '/indexes', ['uid' => $index, 'primaryKey' => 'id']);
         }
         $this->engine->mutate('POST', '/swap-indexes', [['indexes' => [$index, $temporary]]]);
+        // Discard the old published settings immediately after the atomic swap.
+        try { $this->publishedFields?->invalidate($index); } catch (\Throwable) { /* Cache expiry and request retry cover transient failures. */ }
         // After the atomic swap, this is the previous generation.
         $this->engine->mutate('DELETE', '/indexes/' . $temporary);
 

@@ -41,6 +41,18 @@ final class PartialMatches
         return $phrase;
     }
 
+    /** Accept exactly one quantity at either end and a natural-language phrase. */
+    public static function quantityPhrase(string $query): ?string
+    {
+        if (QuantityUnits::queryKey($query) === null) return null;
+        $quantity = '[0-9]{1,9}(?:[.,][0-9]{1,8})?\s*(?:ml|kg|l|g)';
+        if (!preg_match('/^\s*(?:(' . $quantity . ')\s+([\p{L}\p{M}\s]+)|([\p{L}\p{M}\s]+)\s+(' . $quantity . '))\s*$/iuD', $query, $m)) return null;
+        $phrase = trim(preg_replace('/\s+/u', ' ', $m[2] !== '' ? $m[2] : $m[3]) ?? '');
+        $words = preg_split('/\s+/u', $phrase, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        if (count($words) < 1 || count($words) > 5 || mb_strlen(preg_replace('/[^\p{L}]/u', '', $phrase) ?? '', 'UTF-8') < 3) return null;
+        return $phrase;
+    }
+
     /** Preserve original order, then round-robin each word's ranked results. */
     public static function append(array $original, array $wordHits, int $perTerm = 20): array
     {
