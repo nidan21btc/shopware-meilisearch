@@ -3,6 +3,8 @@
 namespace ShopwareMeilisearch\Search;
 
 use Psr\Log\LoggerInterface;
+use Shopware\Core\Content\Category\CategoryCollection;
+use Shopware\Core\Content\Product\Aggregate\ProductManufacturer\ProductManufacturerCollection;
 use Shopware\Core\Content\Product\Aggregate\ProductVisibility\ProductVisibilityDefinition;
 use Shopware\Core\Content\Product\DataAbstractionLayer\VariantListingConfig;
 use Shopware\Core\Content\Product\SalesChannel\AbstractProductCloseoutFilterFactory;
@@ -14,6 +16,7 @@ use Shopware\Core\Framework\DataAbstractionLayer\Search\Aggregation\Bucket\Terms
 use Shopware\Core\Framework\DataAbstractionLayer\Search\AggregationResult\Bucket\TermsResult;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsAnyFilter;
+use Shopware\Core\Content\Product\SalesChannel\SalesChannelProductCollection;
 use Shopware\Core\System\SalesChannel\Entity\SalesChannelRepository;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
@@ -21,6 +24,11 @@ use Shopware\Core\System\SystemConfig\SystemConfigService;
 final class SearchService
 {
     public const MAX_CANDIDATES = 5000;
+    /**
+     * @param SalesChannelRepository<SalesChannelProductCollection> $products
+     * @param EntityRepository<ProductManufacturerCollection> $manufacturers
+     * @param EntityRepository<CategoryCollection> $categories
+     */
     public function __construct(
         private readonly Engine $engine,
         private readonly SalesChannelRepository $products,
@@ -583,6 +591,7 @@ final class SearchService
         }
     }
 
+    /** @param EntityRepository<CategoryCollection|ProductManufacturerCollection> $repository */
     private function filteredFacet(string $facet, string $field, EntityRepository $repository, array $candidates, array $families, array $primaryIds, SearchInput $input, array $prices, SalesChannelContext $context): array
     {
         $other = new SearchInput($input->query, $input->page, $input->sort,
@@ -660,6 +669,7 @@ final class SearchService
         return $this->facet($visibleResult, $aggregate($hidden), $repository, $context, $selected);
     }
 
+    /** @param EntityRepository<CategoryCollection|ProductManufacturerCollection> $repository */
     private function facet(?TermsResult $result, ?TermsResult $supplemental, EntityRepository $repository, SalesChannelContext $context, array $selected = []): array
     {
         if ($result === null && $supplemental === null && $selected === []) {
@@ -677,6 +687,7 @@ final class SearchService
         return $this->facetFromCounts($counts, $repository, $context, $selected);
     }
 
+    /** @param EntityRepository<CategoryCollection|ProductManufacturerCollection> $repository */
     private function facetFromCounts(array $counts, EntityRepository $repository, SalesChannelContext $context, array $selected): array
     {
         // A selected option must remain removable even if another filter now

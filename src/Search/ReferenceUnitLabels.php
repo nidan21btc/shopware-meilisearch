@@ -8,11 +8,13 @@ use Shopware\Core\Content\Product\SalesChannel\SalesChannelProductEntity;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
+use Shopware\Core\System\Unit\UnitCollection;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
 
 /** Ground-price units are read in the current language or shown as neutral SI symbols. */
 final class ReferenceUnitLabels
 {
+    /** @param EntityRepository<UnitCollection> $units */
     public function __construct(private readonly EntityRepository $units, private readonly SystemConfigService $config)
     {
     }

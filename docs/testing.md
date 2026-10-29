@@ -27,7 +27,7 @@ the indexer's entries with web requests; verify the actual production adapter.
 
 ## Static analysis
 
-After installing the isolated `.github/ci` dependencies, run `.github/ci/vendor/bin/phpstan analyse -c phpstan.neon --no-progress`. CI enforces PHPStan level 1 without a baseline. Higher levels currently report existing type issues that require separate review.
+After installing the isolated `.github/ci` dependencies, run `.github/ci/vendor/bin/phpstan analyse -c phpstan.neon --no-progress`. CI enforces PHPStan level 2 without a baseline. Higher levels may report additional issues that require separate review.
 
 ## Fast regression checks
 

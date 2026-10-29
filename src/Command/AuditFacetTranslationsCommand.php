@@ -12,6 +12,7 @@ use Shopware\Core\Framework\DataAbstractionLayer\Search\Sorting\FieldSorting;
 use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\SalesChannel\Context\AbstractSalesChannelContextFactory;
 use Shopware\Core\System\SalesChannel\Context\SalesChannelContextService;
+use Shopware\Core\Content\Product\SalesChannel\SalesChannelProductCollection;
 use Shopware\Core\System\SalesChannel\Entity\SalesChannelRepository;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -22,6 +23,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 #[AsCommand(name: 'shopware-meilisearch:search:audit-facet-translations', description: 'Find missing manufacturer and category labels in index languages.')]
 final class AuditFacetTranslationsCommand extends Command
 {
+    /** @param SalesChannelRepository<SalesChannelProductCollection> $products */
     public function __construct(private readonly Connection $connection, private readonly AbstractSalesChannelContextFactory $contexts,
         private readonly SalesChannelRepository $products, private readonly ParentTranslations $parents)
     {

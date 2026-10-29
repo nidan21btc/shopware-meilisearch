@@ -11,6 +11,7 @@ use Shopware\Core\Framework\DataAbstractionLayer\Search\Sorting\FieldSorting;
 use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\SalesChannel\Context\AbstractSalesChannelContextFactory;
 use Shopware\Core\System\SalesChannel\Context\SalesChannelContextService;
+use Shopware\Core\Content\Product\SalesChannel\SalesChannelProductCollection;
 use Shopware\Core\System\SalesChannel\Entity\SalesChannelRepository;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -21,6 +22,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 #[AsCommand(name: 'shopware-meilisearch:search:audit-reference-units', description: 'Count reference-price units that cannot be displayed in each language.')]
 final class AuditReferenceUnitsCommand extends Command
 {
+    /** @param SalesChannelRepository<SalesChannelProductCollection> $products */
     public function __construct(private readonly Connection $connection, private readonly AbstractSalesChannelContextFactory $contexts,
         private readonly SalesChannelRepository $products, private readonly ReferenceUnitLabels $labels)
     {

@@ -8,6 +8,7 @@ use Shopware\Core\Content\Product\SalesChannel\ProductAvailableFilter;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\MultiFilter;
+use Shopware\Core\Content\Product\SalesChannel\SalesChannelProductCollection;
 use Shopware\Core\System\SalesChannel\Entity\SalesChannelRepository;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
@@ -15,6 +16,7 @@ use Shopware\Core\System\SystemConfig\SystemConfigService;
 /** Find exact, configured language-neutral codes without borrowing a product name. */
 final class IdentifierFallback
 {
+    /** @param SalesChannelRepository<SalesChannelProductCollection> $products */
     public function __construct(private readonly Engine $engine, private readonly SalesChannelRepository $products,
         private readonly ParentTranslations $parents, private readonly AbstractProductCloseoutFilterFactory $closeoutFilter,
         private readonly SystemConfigService $config)
