@@ -165,3 +165,21 @@ symlink must not recursively delete the shared installation it points to.
 A cleaned workspace deliberately does not retain the full disposable shop or its
 secrets. Recreate fixtures from these instructions for a new integration run;
 reinstalling that environment is different from running the fast regression suite.
+
+## Comparing storefront results around a refactor
+
+`tests/compare_search_snapshots.py` records product order, result status, facet
+counts and selections from a loopback test shop. It repeats each supplied query
+with sorting, pagination, and available category/manufacturer filters. Capture
+before changing code, then compare with the same arguments afterwards:
+
+```sh
+python3 tests/compare_search_snapshots.py capture --url http://127.0.0.1 --host shop.test --snapshot /tmp/search-snapshot.json --query 'example'
+python3 tests/compare_search_snapshots.py compare --url http://127.0.0.1 --host shop.test --snapshot /tmp/search-snapshot.json --query 'example'
+rm /tmp/search-snapshot.json
+```
+
+Use an isolated shop and representative queries. Snapshots contain product IDs
+and facet data: do not commit them or share them; remove them after the comparison.
+These comparisons complement synthetic regression cases and cannot cover every
+possible search or concurrent change to a shop's catalog.

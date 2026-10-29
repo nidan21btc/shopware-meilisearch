@@ -3,19 +3,10 @@
 namespace ShopwareMeilisearch\Search;
 
 use Psr\Log\LoggerInterface;
-use Shopware\Core\Content\Category\CategoryCollection;
-use Shopware\Core\Content\Product\Aggregate\ProductManufacturer\ProductManufacturerCollection;
-use Shopware\Core\Content\Product\Aggregate\ProductVisibility\ProductVisibilityDefinition;
 use Shopware\Core\Content\Product\DataAbstractionLayer\VariantListingConfig;
-use Shopware\Core\Content\Product\SalesChannel\AbstractProductCloseoutFilterFactory;
-use Shopware\Core\Content\Product\SalesChannel\ProductAvailableFilter;
 use Shopware\Core\Checkout\Cart\Price\Struct\CalculatedPrice;
 use Shopware\Core\Checkout\Cart\Price\Struct\PriceCollection;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
-use Shopware\Core\Framework\DataAbstractionLayer\Search\Aggregation\Bucket\TermsAggregation;
-use Shopware\Core\Framework\DataAbstractionLayer\Search\AggregationResult\Bucket\TermsResult;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
-use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsAnyFilter;
 use Shopware\Core\Content\Product\SalesChannel\SalesChannelProductCollection;
 use Shopware\Core\System\SalesChannel\Entity\SalesChannelRepository;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
@@ -26,15 +17,12 @@ final class SearchService
     public const MAX_CANDIDATES = 5000;
     /**
      * @param SalesChannelRepository<SalesChannelProductCollection> $products
-     * @param EntityRepository<ProductManufacturerCollection> $manufacturers
-     * @param EntityRepository<CategoryCollection> $categories
      */
     public function __construct(
         private readonly Engine $engine,
         private readonly SalesChannelRepository $products,
-        private readonly EntityRepository $manufacturers,
-        private readonly EntityRepository $categories,
-        private readonly AbstractProductCloseoutFilterFactory $closeoutFilter,
+        private readonly SearchCriteria $criteria,
+        private readonly FacetCalculator $facets,
         private readonly ParentTranslations $parents,
         private readonly CurrentLanguageNames $currentNames,
         private readonly IdentifierFallback $identifierFallback,
@@ -261,7 +249,7 @@ final class SearchService
         // parent article number), rather than hiding it unconditionally.
         $families = new Criteria($candidates);
         $families->setLimit(self::MAX_CANDIDATES)->addFields(['id', 'parentId']);
-        $this->applyAvailability($families, $context);
+        $this->criteria->applyAvailability($families, $context);
         $familyMap = [];
         foreach ($this->products->search($families, $context)->getEntities() as $product) {
             $parentId = $product->get('parentId');
@@ -285,8 +273,8 @@ final class SearchService
         if ($hasFilters) {
             $eligibleCriteria = new Criteria($candidates);
             $eligibleCriteria->setLimit(self::MAX_CANDIDATES);
-            $this->applyAvailability($eligibleCriteria, $context);
-            $this->applyFilters($eligibleCriteria, $input);
+            $this->criteria->applyAvailability($eligibleCriteria, $context);
+            $this->criteria->applyFilters($eligibleCriteria, $input);
             $eligibleIds = $this->products->searchIds($eligibleCriteria, $context)->getIds();
             if ($hasPriceFilter) $eligibleIds = self::filterByDisplayedPrice($eligibleIds, $displayedPrices ?? [], $input);
             $eligibleSet = array_fill_keys($eligibleIds, true);
@@ -297,8 +285,8 @@ final class SearchService
         if ($preciseIds !== null) {
             $preciseCriteria = new Criteria($preciseIds);
             $preciseCriteria->setLimit(self::MAX_CANDIDATES);
-            $this->applyAvailability($preciseCriteria, $context);
-            $this->applyFilters($preciseCriteria, $input);
+            $this->criteria->applyAvailability($preciseCriteria, $context);
+            $this->criteria->applyFilters($preciseCriteria, $input);
             $eligible = $this->products->searchIds($preciseCriteria, $context)->getIds();
             if ($hasPriceFilter) $eligible = self::filterByDisplayedPrice($eligible, $displayedPrices ?? [], $input);
             $preciseSet = array_fill_keys($preciseIds, true);
@@ -320,38 +308,16 @@ final class SearchService
             return $empty;
         }
 
-        // The discovery template does not render facets. Avoid aggregating the
-        // entire catalog just to show the initial product carousel. Explicit
-        // filter requests retain the ordinary facet behavior.
-        $manufacturerFacets = [];
-        $categoryFacets = [];
-        if ($input->query !== '' || $hasFilters) {
-            // A facet ignores its own selections (OR within that facet) but must
-            // reflect the other facet and the current price range.
-            $manufacturerFacets = $this->filteredFacet('manufacturer', 'manufacturerId', $this->manufacturers, $allCandidates, $familyMap, $familyPrimaryIds, $input, $displayedPrices ?? [], $context);
-            $categoryFacets = $this->filteredFacet('category', 'categoriesRo.id', $this->categories, $allCandidates, $familyMap, $familyPrimaryIds, $input, $displayedPrices ?? [], $context);
-            if ($preciseIds !== null && !$input->includeSimilar) {
-                // A facet choice may leave fewer precise hits than the threshold,
-                // in which case the result view automatically includes similar
-                // hits. Conversely another choice can restore the precise view.
-                $preciseManufacturers = $hasSimilar ? $manufacturerFacets : $this->filteredFacet('manufacturer', 'manufacturerId', $this->manufacturers, $preciseIds, $familyMap, $familyPrimaryIds, $input, $displayedPrices ?? [], $context);
-                $preciseCategories = $hasSimilar ? $categoryFacets : $this->filteredFacet('category', 'categoriesRo.id', $this->categories, $preciseIds, $familyMap, $familyPrimaryIds, $input, $displayedPrices ?? [], $context);
-                $allManufacturers = $hasSimilar ? $this->filteredFacet('manufacturer', 'manufacturerId', $this->manufacturers, $unrestrictedCandidates, $familyMap, $familyPrimaryIds, $input, $displayedPrices ?? [], $context) : $manufacturerFacets;
-                $allCategories = $hasSimilar ? $this->filteredFacet('category', 'categoriesRo.id', $this->categories, $unrestrictedCandidates, $familyMap, $familyPrimaryIds, $input, $displayedPrices ?? [], $context) : $categoryFacets;
-                $manufacturerFacets = self::precisionFacetCounts($preciseManufacturers, $allManufacturers, $minimumPrecise);
-                $categoryFacets = self::precisionFacetCounts($preciseCategories, $allCategories, $minimumPrecise);
-            }
-        }
-        // Hide only this sales channel's navigation root; other categories and
-        // the indexed data remain unchanged. Apply after merging both facet sets.
-        $navigationRoot = $context->getSalesChannel()->getNavigationCategoryId();
-        $categoryFacets = array_values(array_filter($categoryFacets, static fn (array $facet): bool => $facet['id'] !== $navigationRoot));
+        [$manufacturerFacets, $categoryFacets] = $this->facets->calculate(
+            $input, $hasFilters, $allCandidates, $familyMap, $familyPrimaryIds, $displayedPrices ?? [],
+            $preciseIds, $hasSimilar, $unrestrictedCandidates, $minimumPrecise, $context,
+        );
         $criteria = new Criteria($candidates);
-        $this->applyAvailability($criteria, $context);
-        $this->applyFilters($criteria, $input);
+        $this->criteria->applyAvailability($criteria, $context);
+        $this->criteria->applyFilters($criteria, $input);
         $criteria->setLimit(self::MAX_CANDIDATES);
         $visibleIds = $this->products->searchIds($criteria, $context)->getIds();
-        if ($hasPriceFilter) $visibleIds = self::filterByDisplayedPrice($visibleIds, $displayedPrices ?? [], $input);
+        if ($hasPriceFilter) $visibleIds = self::filterByDisplayedPrice($visibleIds, $displayedPrices, $input);
         if ($input->sort === 'relevance') {
             $positions = array_flip($candidates);
             usort($visibleIds, static fn (string $a, string $b) => $positions[$a] <=> $positions[$b]);
@@ -392,7 +358,7 @@ final class SearchService
         }
         if ($pageIds !== []) {
             $hydrate = new Criteria($pageIds);
-            $this->applyAvailability($hydrate, $context);
+            $this->criteria->applyAvailability($hydrate, $context);
             foreach (['translations', 'cover.media', 'manufacturer.translations', 'options.group', 'options.translations', 'unit.translations'] as $association) {
                 $hydrate->addAssociation($association);
             }
@@ -459,16 +425,7 @@ final class SearchService
     /** Facet counts follow the same short-word threshold as filtered results. */
     public static function precisionFacetCounts(array $precise, array $all, int $threshold): array
     {
-        $preciseById = array_column($precise, null, 'id');
-        $allById = array_column($all, null, 'id');
-        $result = [];
-        foreach ($allById + $preciseById as $id => $value) {
-            $exact = $preciseById[$id]['count'] ?? 0;
-            $value['count'] = $exact >= $threshold || !isset($allById[$id]) ? $exact : $allById[$id]['count'];
-            $result[] = $value;
-        }
-        usort($result, static fn (array $a, array $b): int => ($b['count'] <=> $a['count']) ?: strcmp($a['name'], $b['name']));
-        return $result;
+        return FacetCalculator::precisionFacetCounts($precise, $all, $threshold);
     }
 
     /** Sort by the actual displayed labels, including untranslated article numbers. */
@@ -498,16 +455,6 @@ final class SearchService
         return $parents;
     }
 
-    private function applyFilters(Criteria $criteria, SearchInput $input): void
-    {
-        if ($input->manufacturers !== []) {
-            $criteria->addFilter(new EqualsAnyFilter('manufacturerId', $input->manufacturers));
-        }
-        if ($input->categories !== []) {
-            $criteria->addFilter(new EqualsAnyFilter('categoriesRo.id', $input->categories));
-        }
-    }
-
     /** @return array<string, float> */
     private function displayedPrices(array $ids, SalesChannelContext $context): array
     {
@@ -516,7 +463,7 @@ final class SearchService
             $criteria = new Criteria($batch);
             $criteria->addFields(['id', 'parentId', 'childCount', 'variantListingConfig', 'calculatedPrice', 'calculatedPrices', 'calculatedCheapestPrice',
                 'prices.ruleId', 'prices.price', 'prices.quantityStart', 'prices.quantityEnd']);
-            $this->applyAvailability($criteria, $context);
+            $this->criteria->applyAvailability($criteria, $context);
             foreach ($this->products->search($criteria, $context)->getEntities() as $product) {
                 // A field-limited DAL query returns PartialEntity instances;
                 // access calculated values through Entity::get in both cases.
@@ -548,8 +495,8 @@ final class SearchService
     private function needsPartialExpansion(array $ids, array $primaryIds, SearchInput $input, SalesChannelContext $context): bool
     {
         $criteria = (new Criteria($ids))->setLimit(self::MAX_CANDIDATES)->addFields(['id', 'parentId']);
-        $this->applyAvailability($criteria, $context);
-        $this->applyFilters($criteria, $input);
+        $this->criteria->applyAvailability($criteria, $context);
+        $this->criteria->applyFilters($criteria, $input);
         $eligible = [];
         $families = [];
         foreach ($this->products->search($criteria, $context)->getEntities() as $product) {
@@ -572,8 +519,8 @@ final class SearchService
         $eligible = [];
         foreach (array_chunk($ids, 1000) as $batch) {
             $criteria = (new Criteria($batch))->setLimit(1000);
-            $this->applyAvailability($criteria, $context);
-            $this->applyFilters($criteria, $input);
+            $this->criteria->applyAvailability($criteria, $context);
+            $this->criteria->applyFilters($criteria, $input);
             $eligible = array_merge($eligible, $this->products->searchIds($criteria, $context)->getIds());
         }
         if ($input->minPrice !== null || $input->maxPrice !== null) {
@@ -583,133 +530,5 @@ final class SearchService
         return $eligible;
     }
 
-    private function applyAvailability(Criteria $criteria, SalesChannelContext $context): void
-    {
-        $criteria->addFilter(new ProductAvailableFilter($context->getSalesChannelId(), ProductVisibilityDefinition::VISIBILITY_SEARCH));
-        if ($this->config->getBool('core.listing.hideCloseoutProductsWhenOutOfStock', $context->getSalesChannelId())) {
-            $criteria->addFilter($this->closeoutFilter->create($context));
-        }
-    }
 
-    /** @param EntityRepository<CategoryCollection>|EntityRepository<ProductManufacturerCollection> $repository */
-    private function filteredFacet(string $facet, string $field, EntityRepository $repository, array $candidates, array $families, array $primaryIds, SearchInput $input, array $prices, SalesChannelContext $context): array
-    {
-        $other = new SearchInput($input->query, $input->page, $input->sort,
-            $facet === 'manufacturer' ? [] : $input->manufacturers,
-            $facet === 'category' ? [] : $input->categories,
-            $input->minPrice, $input->maxPrice, $input->includeSimilar);
-        $selected = $facet === 'manufacturer' ? $input->manufacturers : $input->categories;
-        $eligible = [];
-        if ($candidates !== []) {
-            $criteria = (new Criteria($candidates))->setLimit(self::MAX_CANDIDATES);
-            $this->applyAvailability($criteria, $context);
-            $this->applyFilters($criteria, $other);
-            $eligible = $this->products->searchIds($criteria, $context)->getIds();
-            if ($other->minPrice !== null || $other->maxPrice !== null) $eligible = self::filterByDisplayedPrice($eligible, $prices, $other);
-        }
-        $parentIds = self::matchedParents($families, $primaryIds, array_fill_keys($eligible, true));
-        $visible = self::withoutMatchedParents($eligible, $parentIds);
-        $hidden = array_values(array_diff($eligible, $visible));
-        $aggregate = function (array $ids) use ($facet, $field, $context): ?TermsResult {
-            if ($ids === []) return null; // Criteria([]) would aggregate the entire catalog.
-            $criteria = new Criteria($ids);
-            $this->applyAvailability($criteria, $context);
-            // The catalog can have more than 100 categories. Truncating a
-            // bucket list also makes precise/full facet counts incomparable.
-            $criteria->addAggregation(new TermsAggregation($facet, $field, self::MAX_CANDIDATES));
-            $result = $this->products->aggregate($criteria, $context)->get($facet);
-            return $result instanceof TermsResult ? $result : null;
-        };
-
-        $visibleResult = $aggregate($visible);
-        if ($facet === 'manufacturer' || $facet === 'category') {
-            $counts = [];
-            foreach ($visibleResult?->getBuckets() ?? [] as $bucket) {
-                $key = $bucket->getKey();
-                if (is_string($key) && preg_match('/^[a-f0-9]{32}$/D', $key)) $counts[$key] = $bucket->getCount();
-            }
-            // A hidden parent reappears for a facet value unless an eligible
-            // matching child also has that same manufacturer or category.
-            $hiddenSet = array_fill_keys($hidden, true);
-            $eligibleSet = array_fill_keys($eligible, true);
-            $childrenByParent = [];
-            foreach ($families as $child => $parent) {
-                if (isset($hiddenSet[$parent], $eligibleSet[$child]) && PartialMatches::hideParent($parent, $child, $primaryIds)) {
-                    $childrenByParent[$parent][] = $child;
-                }
-            }
-            $ids = array_keys($hiddenSet);
-            foreach ($childrenByParent as $children) array_push($ids, ...$children);
-            $memberships = [];
-            foreach (array_chunk(array_values(array_unique($ids)), 1000) as $batch) {
-                $criteria = (new Criteria($batch))->setLimit(1000);
-                if ($facet === 'manufacturer') $criteria->addFields(['id', 'manufacturerId']);
-                else $criteria->addAssociation('categoriesRo')->addFields(['id', 'categoriesRo.id']);
-                $this->applyAvailability($criteria, $context);
-                foreach ($this->products->search($criteria, $context)->getEntities() as $product) {
-                    $values = [];
-                    if ($facet === 'manufacturer') {
-                        $brand = $product->get('manufacturerId');
-                        if (is_string($brand)) $values[] = $brand;
-                    } else {
-                        foreach ($product->get('categoriesRo') ?? [] as $category) $values[] = $category->getId();
-                    }
-                    $memberships[$product->getId()] = array_fill_keys($values, true);
-                }
-            }
-            foreach ($childrenByParent as $parent => $children) {
-                foreach (array_keys($memberships[$parent] ?? []) as $value) {
-                    foreach ($children as $child) if (isset($memberships[$child][$value])) continue 2;
-                    $counts[$value] = ($counts[$value] ?? 0) + 1;
-                }
-            }
-            return $this->facetFromCounts($counts, $repository, $context, $selected);
-        }
-
-        return $this->facet($visibleResult, $aggregate($hidden), $repository, $context, $selected);
-    }
-
-    /** @param EntityRepository<CategoryCollection>|EntityRepository<ProductManufacturerCollection> $repository */
-    private function facet(?TermsResult $result, ?TermsResult $supplemental, EntityRepository $repository, SalesChannelContext $context, array $selected = []): array
-    {
-        if ($result === null && $supplemental === null && $selected === []) {
-            return [];
-        }
-        $counts = [];
-        foreach ([$result, $supplemental] as $aggregation) {
-            foreach ($aggregation?->getBuckets() ?? [] as $bucket) {
-                $key = $bucket->getKey();
-                if (is_string($key) && preg_match('/^[a-f0-9]{32}$/D', $key)) {
-                    $counts[$key] ??= $bucket->getCount();
-                }
-            }
-        }
-        return $this->facetFromCounts($counts, $repository, $context, $selected);
-    }
-
-    /** @param EntityRepository<CategoryCollection>|EntityRepository<ProductManufacturerCollection> $repository */
-    private function facetFromCounts(array $counts, EntityRepository $repository, SalesChannelContext $context, array $selected): array
-    {
-        // A selected option must remain removable even if another filter now
-        // leaves it with no matching products.
-        foreach ($selected as $id) $counts[$id] ??= 0;
-        if ($counts === []) {
-            return [];
-        }
-        $criteria = new Criteria(array_keys($counts));
-        $criteria->addAssociation('translations');
-        $values = [];
-        foreach ($repository->search($criteria, $context->getContext())->getEntities() as $entity) {
-            if (method_exists($entity, 'getActive') && !$entity->getActive()) {
-                continue;
-            }
-            $name = LanguageText::field($entity, $context->getLanguageId(), 'name');
-            if (is_string($name) && trim($name) !== '') {
-                $values[] = ['id' => $entity->getId(), 'name' => $name, 'count' => $counts[$entity->getId()]];
-            }
-        }
-        usort($values, static fn (array $a, array $b) => ($b['count'] <=> $a['count']) ?: strcmp($a['name'], $b['name']));
-
-        return $values;
-    }
 }
