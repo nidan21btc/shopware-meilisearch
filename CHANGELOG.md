@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.0
+
+- Share overlay searches with query, selected filters and sort order; provide a
+  clipboard fallback and a desktop clear button. Restore and select the last
+  search when reopening the overlay.
+- Improve German umlaut variants and quantity-aware relevance; keep article
+  identifiers and ambiguous quantity queries protected from inappropriate folding.
+- Warm published search-field settings after index swaps and cache them for 24
+  hours. Extend the bounded admission-lock wait to reduce false 429 responses.
+- Protect automatically displayed popular searches with a minimum of ten
+  sessions and a configurable blocklist.
+- Improve overlay loading, keyboard and filter behavior; add regression tests,
+  PHPStan analysis and update/upgrade guidance.
+
 ## 0.3.1
 
 - Hide the current sales channel's navigation root in category filters, and
