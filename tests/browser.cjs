@@ -12,8 +12,8 @@ const fixture = `<!doctype html><html><body><button class="search-toggle-btn">Se
 <button data-el-close class="el-search__back">Back</button><form data-el-query-form><input type="search" data-el-query><button type="button" data-el-clear hidden>Clear</button></form><button data-el-close class="el-search__close">Close</button><p data-el-status role="status"></p>
 <div data-el-results class="el-search__body"></div><div hidden data-el-network-error><button data-el-retry>Retry</button></div></dialog>
 <script>window.PluginManager={initializePlugin:async(name,selector)=>{if(name!=='AddToCart'||selector!=='[data-el-results] [data-add-to-cart]')throw Error('Unexpected plugin');window.initialized=(window.initialized||0)+1;}}</script></body></html>`;
-const response = (q, params = new URLSearchParams(), english = false) => `<aside class="el-search__filters"><button data-el-suggestion="orchid">Orchid</button><div class="el-search__mobile-chips"><div class="el-search__chip-row"><button type="button" data-el-chip data-facet="category" data-value="${facetId}">Flowers</button></div></div><button type="button" class="el-search__filter-toggle" data-el-filter-toggle aria-expanded="false">Filters</button><form data-el-filters><details open data-el-facet="category"><summary>Category</summary><input data-el-facet-search><label data-el-facet-value><input type="checkbox" name="category[]" value="${facetId}">Flowers</label>${[2,3,4,5,6,7].map(n => `<label data-el-facet-value ${n>5?'hidden':''}><input type="checkbox">Category ${n}</label>`).join('')}<button type="button" data-el-show-more data-more="More" data-less="Less">More</button></details><button type="button" data-el-reset>Reset</button></form></aside>
-<section data-el-result-status="Results for ${q}"><div class="el-search__toolbar"><span>87 Ergebnisse gefunden</span><button type="button" class="el-search__show-all" data-el-show-all aria-controls="el-search-product-grid" aria-expanded="false">Show all</button><label>Sortiert nach: <select data-el-sort><option value="relevance">Relevanz</option><option value="price-asc">Price</option></select></label></div><button type="button" data-el-similar aria-pressed="${params.has('similar') ? String(params.get('similar') === '1') : String(english || q.trim().split(/\s+/).filter(Boolean).length >= 2)}">Similar</button><p class="test-query">${q}</p><div id="el-search-product-grid" class="el-search__grid">${Array.from({length:12}, (_,i) => `<article class="el-search__card">Product ${i}</article>`).join('')}</div><nav class="el-search__pagination"><button data-el-page="2">Next</button></nav><form data-add-to-cart><button>Add</button></form></section>`;
+const response = (q, params = new URLSearchParams(), english = false) => `<aside class="el-search__filters"><button data-el-suggestion="orchid">Orchid</button><div class="el-search__mobile-chips"><div class="el-search__chip-row"><button type="button" data-el-chip data-facet="category" data-value="${facetId}">Flowers</button></div></div><button type="button" class="el-search__filter-toggle" data-el-filter-toggle aria-expanded="false">Filters</button><form data-el-filters><details open data-el-facet="category"><summary>Category</summary><input data-el-facet-search><label data-el-facet-value><input type="checkbox" name="category[]" value="${facetId}" ${params.getAll('category[]').includes(facetId) ? 'checked' : ''}>Flowers</label>${[2,3,4,5,6,7].map(n => `<label data-el-facet-value ${n>5?'hidden':''}><input type="checkbox">Category ${n}</label>`).join('')}<button type="button" data-el-show-more data-more="More" data-less="Less">More</button></details><button type="button" data-el-reset>Reset</button></form></aside>
+<section data-el-result-status="Results for ${q}"><div class="el-search__toolbar"><span>87 Ergebnisse gefunden</span><button type="button" class="el-search__show-all" data-el-show-all aria-controls="el-search-product-grid" aria-expanded="false">Show all</button><label>Sortiert nach: <select data-el-sort><option value="relevance">Relevanz</option><option value="price-asc" ${params.get('sort') === 'price-asc' ? 'selected' : ''}>Price</option></select></label></div><button type="button" data-el-similar aria-pressed="${params.has('similar') ? String(params.get('similar') === '1') : String(english || q.trim().split(/\s+/).filter(Boolean).length >= 2)}">Similar</button><p class="test-query">${q}</p><div id="el-search-product-grid" class="el-search__grid">${Array.from({length:12}, (_,i) => `<article class="el-search__card">Product ${i}</article>`).join('')}</div><nav class="el-search__pagination"><button data-el-page="2">Next</button></nav><form data-add-to-cart><button>Add</button></form></section>`;
 
 (async () => {
     const browser = await chromium.launch({headless: true, args: ['--no-sandbox']});
@@ -94,6 +94,12 @@ const response = (q, params = new URLSearchParams(), english = false) => `<aside
         await page.locator('[data-el-sort]').selectOption('price-asc');
         await page.waitForTimeout(100);
         assert.equal(requests.at(-1).searchParams.get('sort'), 'price-asc');
+        await query.focus();
+        await query.press('Enter');
+        await page.waitForFunction(() => document.querySelector('[data-el-results]').getAttribute('aria-busy') === 'false');
+        assert.equal(requests.at(-1).searchParams.get('category[]'), facetId, 'Enter lost the active category');
+        assert.equal(requests.at(-1).searchParams.get('sort'), 'price-asc', 'Enter lost the selected sort');
+        assert.equal(requests.at(-1).searchParams.get('page'), '1', 'Enter should return to the first page');
         await page.locator('[data-el-page]').click();
         await page.waitForTimeout(100);
         assert.equal(requests.at(-1).searchParams.get('page'), '2');
@@ -112,6 +118,12 @@ const response = (q, params = new URLSearchParams(), english = false) => `<aside
         assert.equal(await page.locator('.search-toggle-btn').evaluate(el => document.activeElement === el), true);
         await page.locator('.header-search-input').focus();
         await page.waitForSelector('[data-el-result-status]');
+        assert.equal(await query.inputValue(), 'latest', 'Reopening must retain the previous query');
+        assert.deepEqual(await query.evaluate(el => [el.selectionStart, el.selectionEnd]), [0, 6], 'Reopening must select the previous query');
+        await page.keyboard.type('new');
+        assert.equal(await query.inputValue(), 'new', 'Typing should replace the selected previous query');
+        await query.fill('latest');
+        await page.waitForFunction(() => document.querySelector('.test-query')?.textContent === 'latest');
         await page.keyboard.press('Escape');
         await page.waitForTimeout(100);
         assert.equal(await page.locator('dialog').evaluate(el => el.open), false, 'Focus restoration reopened dialog');
@@ -166,7 +178,7 @@ const response = (q, params = new URLSearchParams(), english = false) => `<aside
         assert.equal(await page.locator('[data-el-filter-toggle]').getAttribute('aria-expanded'), 'true');
         assert.equal(await page.locator('[data-el-filters]').isVisible(), true, 'Mobile filters did not open');
         await page.locator('details[data-el-facet=category] summary').click();
-        await page.locator('[name="category[]"]').check();
+        await page.locator('[name="category[]"]').uncheck();
         await page.waitForFunction(() => document.querySelector('[data-el-results]').getAttribute('aria-busy') === 'false');
         assert.equal(await page.locator('details[data-el-facet=category]').evaluate(el => el.open), true, 'Mobile facet collapsed after selection');
         assert.equal(await page.locator('[name="category[]"]').evaluate(el => document.activeElement === el), true, 'Mobile filter focus was lost');

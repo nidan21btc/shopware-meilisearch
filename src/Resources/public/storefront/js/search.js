@@ -236,6 +236,7 @@ if (dialog && typeof dialog.showModal === 'function') {
         document.documentElement.style.overflow = 'hidden';
         dialog.showModal();
         query.focus();
+        query.select();
         load(1);
     };
     const close = () => {
@@ -351,7 +352,7 @@ if (dialog && typeof dialog.showModal === 'function') {
     });
     dialog.querySelector('[data-el-query-form]').addEventListener('submit', (event) => {
         event.preventDefault();
-        load(1, true);
+        load(1);
     });
     query.addEventListener('input', () => {
         clearTimeout(popularityTimer);
