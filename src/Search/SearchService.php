@@ -591,7 +591,7 @@ final class SearchService
         }
     }
 
-    /** @param EntityRepository<CategoryCollection|ProductManufacturerCollection> $repository */
+    /** @param EntityRepository<CategoryCollection>|EntityRepository<ProductManufacturerCollection> $repository */
     private function filteredFacet(string $facet, string $field, EntityRepository $repository, array $candidates, array $families, array $primaryIds, SearchInput $input, array $prices, SalesChannelContext $context): array
     {
         $other = new SearchInput($input->query, $input->page, $input->sort,
@@ -669,7 +669,7 @@ final class SearchService
         return $this->facet($visibleResult, $aggregate($hidden), $repository, $context, $selected);
     }
 
-    /** @param EntityRepository<CategoryCollection|ProductManufacturerCollection> $repository */
+    /** @param EntityRepository<CategoryCollection>|EntityRepository<ProductManufacturerCollection> $repository */
     private function facet(?TermsResult $result, ?TermsResult $supplemental, EntityRepository $repository, SalesChannelContext $context, array $selected = []): array
     {
         if ($result === null && $supplemental === null && $selected === []) {
@@ -687,7 +687,7 @@ final class SearchService
         return $this->facetFromCounts($counts, $repository, $context, $selected);
     }
 
-    /** @param EntityRepository<CategoryCollection|ProductManufacturerCollection> $repository */
+    /** @param EntityRepository<CategoryCollection>|EntityRepository<ProductManufacturerCollection> $repository */
     private function facetFromCounts(array $counts, EntityRepository $repository, SalesChannelContext $context, array $selected): array
     {
         // A selected option must remain removable even if another filter now
