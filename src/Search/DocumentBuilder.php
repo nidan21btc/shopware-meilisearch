@@ -78,6 +78,16 @@ final class DocumentBuilder
             }
         }
 
+        foreach ($fields as $field) {
+            if (!SearchFold::supports($field)) continue;
+            $value = str_starts_with($field, 'customFields.')
+                ? ($document['customFields'][substr($field, strlen('customFields.'))] ?? '')
+                : ($document[$field] ?? '');
+            if (!is_string($value) && !is_array($value)) continue;
+            $alias = SearchFold::aliases($value);
+            if ($alias !== '' && $alias !== []) $document['folded'][str_replace('.', '__', $field)] = $alias;
+        }
+
         if ($unnamed) {
             // Only a language-local, product-specific text can qualify a nameless product.
             // A category, manufacturer or identifier alone must not make it
@@ -108,6 +118,10 @@ final class DocumentBuilder
         $searchable = $fields;
         $namePosition = array_search('name', $searchable, true);
         if ($namePosition !== false) array_splice($searchable, $namePosition + 1, 0, ['nameHyphenAliases']);
+        // Keep the existing field priorities stable; folded fields are fallback aliases.
+        foreach ($fields as $field) {
+            if (SearchFold::supports($field)) $searchable[] = 'folded.' . str_replace('.', '__', $field);
+        }
 
 
         return [

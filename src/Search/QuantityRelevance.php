@@ -5,17 +5,30 @@ namespace ShopwareMeilisearch\Search;
 /** Prefer an explicitly requested exact physical amount among equally matched results. */
 final class QuantityRelevance
 {
-    /** Promote exact quantities only when the product also matches the full text phrase. */
-    public static function promoteCombined(array $hits, ?string $key, array $phraseIds): array
+    /** Promote exact quantities only within the strongest engine relevance group. */
+    public static function promoteCombined(array $hits, ?string $key, array $names, string $phrase): array
     {
-        if ($key === null || $phraseIds === []) return $hits;
-        $allowed = array_fill_keys($phraseIds, true);
-        $exact = []; $remaining = [];
+        if ($key === null || $names === [] || $hits === []) return $hits;
+        $details = $hits[0]['_rankingScoreDetails'] ?? [];
+        $words = $details['words']['matchingWords'] ?? null; $typos = $details['typo']['typoCount'] ?? null;
+        if (!is_int($words) || !is_int($typos)) return $hits;
+        $exact = []; $remaining = []; $tail = []; $inStrongest = true;
         foreach ($hits as $hit) {
-            if (isset($hit['id'], $allowed[$hit['id']]) && ($hit['quantityKey'] ?? null) === $key) $exact[] = $hit;
+            $d = $hit['_rankingScoreDetails'] ?? [];
+            if (($d['words']['matchingWords'] ?? null) !== $words || ($d['typo']['typoCount'] ?? null) !== $typos) $inStrongest = false;
+            if (!$inStrongest) { $tail[] = $hit; continue; }
+            $id = $hit['id'] ?? '';
+            if (($hit['quantityKey'] ?? null) === $key && isset($names[$id]) && self::wholeWords($phrase, $names[$id])) $exact[] = $hit;
             else $remaining[] = $hit;
         }
-        return array_merge($exact, $remaining);
+        return array_merge($exact, $remaining, $tail);
+    }
+
+    public static function wholeWords(string $phrase, string $name): bool
+    {
+        preg_match_all('/[\p{L}\p{N}]+/u', SearchFold::text($phrase), $needle);
+        preg_match_all('/[\p{L}\p{N}]+/u', SearchFold::text($name), $haystack);
+        return $needle[0] !== [] && array_diff($needle[0], $haystack[0]) === [];
     }
 
     public static function reorder(array $hits, ?string $key): array

@@ -38,36 +38,17 @@ final class SearchService
 
     public function search(SearchInput $input, SalesChannelContext $context): array
     {
-        $alternate = OrthographicFallback::german($input->query, $context->getLanguageInfo()->localeCode);
-        $result = $this->searchOnce($input, $context, $alternate);
-        if ($result['total'] > 0) return $result;
-
-        // A stale, unavailable or filtered index hit is not a visible result.
-        // Only try the same-language spelling alternative after all Shopware
-        // visibility and customer filters have been applied.
-        if ($alternate === null) return $result;
-        try {
-            $corrected = new SearchInput($alternate, $input->page, $input->sort, $input->manufacturers,
-                $input->categories, $input->minPrice, $input->maxPrice, $input->includeSimilar);
-            $fallback = $this->searchOnce($corrected, $context);
-            if ($fallback['total'] > 0) {
-                $fallback['orthographyFallback'] = true;
-                return $fallback;
-            }
-        } catch (\Throwable) {
-            // A failed optional retry must not replace the original response.
-        }
-        return $result;
+        return $this->searchOnce($input, $context);
     }
 
-    private function searchOnce(SearchInput $input, SalesChannelContext $context, ?string $orthographic = null): array
+    private function searchOnce(SearchInput $input, SalesChannelContext $context): array
     {
         $index = Engine::indexName($context->getSalesChannelId(), $context->getLanguageId());
         // Retrieve IDs and the missing-name marker only. Context-dependent
         // filters, prices and sorting belong to Shopware.
         $needsTypoDetails = $input->query !== '';
-        $response = $this->engine->request('POST', '/indexes/' . $index . '/search', [
-            'q' => $input->query,
+        $payload = [
+            'q' => preg_match('/^de(?:-|$)/i', $context->getLanguageInfo()->localeCode) && !IdentifierFallback::isCode($input->query) ? SearchFold::text($input->query) : $input->query,
             'page' => 1,
             'hitsPerPage' => self::MAX_CANDIDATES,
             'attributesToRetrieve' => ['id', 'unnamed', 'quantityKey'],
@@ -75,49 +56,36 @@ final class SearchService
             // Keep rare distinguishing terms if a multi-word query has no
             // full match.
             'matchingStrategy' => 'frequency',
-        ]);
+        ];
+        // Keep generated spelling fields out of unrelated queries, especially
+        // short prefixes. Reuse the configured fields instead of another API call.
+        if ($input->query !== '' && (!preg_match('/^de(?:-|$)/i', $context->getLanguageInfo()->localeCode) || !SearchFold::usesAliases($input->query))) {
+            try {
+                $fields = IndexFields::forLocale($this->config->getString('ShopwareMeilisearch.config.indexFields', $context->getSalesChannelId()),
+                    $this->config->getString('ShopwareMeilisearch.config.indexFieldsByLanguage', $context->getSalesChannelId()), $context->getLanguageInfo()->localeCode);
+                if (in_array('name', $fields, true)) $fields[] = 'nameHyphenAliases';
+                $payload['attributesToSearchOn'] = $fields;
+            } catch (\Throwable $error) {
+                $this->logger->warning('Local search field restriction was skipped', ['exceptionClass' => $error::class]);
+            }
+        }
+        $response = $this->engine->request('POST', '/indexes/' . $index . '/search', $payload);
         $candidates = [];
         $quantityKey = QuantityUnits::queryKey($input->query);
         $hits = $response['hits'] ?? [];
         if ($needsTypoDetails) {
             $hits = TypoRelevance::reorder($hits);
-            $hits = QuantityRelevance::reorder($hits, $quantityKey);
-        }
-        if ($orthographic !== null) {
-            try {
-                $alternative = $this->engine->request('POST', '/indexes/' . $index . '/search', [
-                    'q' => $orthographic, 'page' => 1, 'hitsPerPage' => self::MAX_CANDIDATES,
-                    'attributesToRetrieve' => ['id', 'unnamed', 'quantityKey'],
-                    'showRankingScoreDetails' => true, 'matchingStrategy' => 'frequency',
-                ]);
-                $seen = array_fill_keys(array_column($hits, 'id'), true);
-                foreach (TypoRelevance::reorder($alternative['hits'] ?? []) as $hit) {
-                    if (isset($hit['id']) && is_string($hit['id']) && !isset($seen[$hit['id']])) {
-                        $seen[$hit['id']] = true;
-                        $hits[] = $hit;
-                    }
+            $phrase = PartialMatches::quantityPhrase($input->query);
+            if ($phrase !== null && $quantityKey !== null) {
+                try {
+                    $ids = array_values(array_filter(array_column(array_slice($hits, 0, 1000), 'id'), static fn ($id) => is_string($id) && preg_match('/^[a-f0-9]{32}$/D', $id)));
+                    $names = $this->currentNames->names($ids, $context);
+                    $hits = QuantityRelevance::promoteCombined($hits, $quantityKey, $names, $phrase);
+                } catch (\Throwable $error) {
+                    $this->logger->warning('Local quantity ranking was skipped', ['exceptionClass' => $error::class]);
                 }
-            } catch (\Throwable $error) {
-                $this->logger->warning('Local spelling expansion was skipped', ['exceptionClass' => $error::class]);
-            }
-        }
-        $phrase = PartialMatches::withoutTrailingQuantity($input->query);
-        if ($phrase !== null && $quantityKey !== null) {
-            try {
-                $phraseResult = $this->engine->request('POST', '/indexes/' . $index . '/search', [
-                    'q' => $phrase, 'limit' => self::MAX_CANDIDATES, 'attributesToRetrieve' => ['id'], 'matchingStrategy' => 'all',
-                ]);
-                $phraseIds = array_column($phraseResult['hits'] ?? [], 'id');
-                $alternatePhrase = $orthographic !== null ? PartialMatches::withoutTrailingQuantity($orthographic) : null;
-                if ($alternatePhrase !== null) {
-                    $alternatePhraseResult = $this->engine->request('POST', '/indexes/' . $index . '/search', [
-                        'q' => $alternatePhrase, 'limit' => self::MAX_CANDIDATES, 'attributesToRetrieve' => ['id'], 'matchingStrategy' => 'all',
-                    ]);
-                    $phraseIds = array_values(array_unique(array_merge($phraseIds, array_column($alternatePhraseResult['hits'] ?? [], 'id'))));
-                }
-                $hits = QuantityRelevance::promoteCombined($hits, $quantityKey, $phraseIds);
-            } catch (\Throwable $error) {
-                $this->logger->warning('Local combined quantity ranking was skipped', ['exceptionClass' => $error::class]);
+            } elseif (QuantityUnits::isStandalone($input->query)) {
+                $hits = QuantityRelevance::reorder($hits, $quantityKey);
             }
         }
         // Preserve a precise view for short words while allowing similar hits.
