@@ -45,7 +45,7 @@ try {
   $pid=pcntl_fork();
   if ($pid===0) {
    $held=fopen($root.'/admission.json','c+'); flock($held,LOCK_EX); touch($root.'/lock-ready');
-   usleep(30000); flock($held,LOCK_UN); fclose($held); exit(0);
+   usleep(150000); flock($held,LOCK_UN); fclose($held); exit(0);
   }
   $until=microtime(true)+2; while(!is_file($root.'/lock-ready') && microtime(true)<$until) usleep(1000);
   verify(is_file($root.'/lock-ready'),'Child must acquire admission lock');
@@ -54,7 +54,7 @@ try {
   $held=fopen($root.'/admission.json','c+'); flock($held,LOCK_EX); $start=hrtime(true);
   $result=$shared->enter($r('192.0.2.93')); $elapsed=(hrtime(true)-$start)/1e6;
   flock($held,LOCK_UN); fclose($held);
-  verify($result?->getStatusCode()===429 && $elapsed>=80 && $elapsed<500,'Stalled lock must be rejected after a bounded wait');
+  verify($result?->getStatusCode()===429 && $elapsed>=220 && $elapsed<1500,'Stalled lock must be rejected after a bounded wait');
  }
  file_put_contents($root.'/admission.json','broken');verify($guard->enter($r('192.0.2.88'))?->getStatusCode()===503,'Invalid shared state must fail closed');
  $secret=$root.'/secret';file_put_contents($secret,str_repeat('a',64)."\n");chmod($secret,0600);verify((string)new Secret('', $secret)===str_repeat('a',64),'Protected secret file must load without trailing whitespace');
