@@ -363,11 +363,13 @@ status or guarantee relevance equal to another search service.
 
 Use the normal deployment process and a reviewed package/source revision. Back up
 the database and private settings, keep the previous compatible release, and
-coordinate active workers/builds before replacing code. Do not use `--reinstall`
-or uninstall/data deletion as a routine update method. Import the new package or
-replace the plugin directory through the deployment pipeline, then run:
+coordinate active workers/builds before replacing code. Plan a maintenance window
+or an atomic deployment so requests and workers cannot use a mixture of old and
+new code. Do not use `--reinstall` or uninstall/data deletion as a routine update
+method. Import the new package or replace the plugin directory, then run:
 
 ```sh
+sw cache:clear
 sw plugin:refresh
 sw plugin:update ShopwareMeilisearch
 umask 022
@@ -376,6 +378,16 @@ sw cache:clear
 sw scheduled-task:register
 sw plugin:list --filter=ShopwareMeilisearch
 ```
+
+**Do not skip the Shopware cache rebuild after changing plugin files**, even if
+the plugin version is unchanged or a migration reports that it cleared the cache.
+The compiled service container can otherwise still use the old constructor
+arguments, causing HTTP 500 responses or failed background jobs. Clear the cache
+immediately after replacing files and again after the plugin update as shown;
+ensure the new container is available to web PHP and workers before resuming
+traffic. Follow the hosting provider's procedure for restarting workers or
+invalidating PHP opcode caches where necessary. A cache rebuild alone does not
+guarantee a zero-downtime deployment.
 
 Regenerate a compiled environment when variables change, restore private-file
 permissions and restart the appropriate supervised workers so they load new code
