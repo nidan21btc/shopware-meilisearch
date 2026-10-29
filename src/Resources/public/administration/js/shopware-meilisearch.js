@@ -55,7 +55,7 @@ Shopware.Component.register('sw-meilisearch-connection', {
         <p>Felder für Schlüssel leer lassen, um bestehende Schlüssel beizubehalten.</p>
         <sw-button variant="primary" :disabled="busy || !acl.can('system_config:update')" @click="save">Verbindung speichern</sw-button>
     </section>`,
-    data() { return {busy: false, configured: false, form: {url: 'http://127.0.0.1:7700', socket: '', concurrency: 2, globalRate: 2, clientRate: 2, searchKey: '', indexKey: '', statusKey: ''}}; },
+    data() { return {busy: false, configured: false, form: {url: 'http://127.0.0.1:7700', socket: '', concurrency: 10, globalRate: 10, clientRate: 5, searchKey: '', indexKey: '', statusKey: ''}}; },
     created() { if (this.acl.can('system_config:update')) this.refresh(); },
     methods: {
         headers() { return {Authorization: `Bearer ${this.loginService.getToken()}`}; },
@@ -220,6 +220,7 @@ function validateSearchConfig(values, locales) {
                     if (entries.length > 32 || entries.some(([id, unit]) => !/^[a-f0-9]{32}$/.test(id) || !unit || typeof unit !== 'object' || Array.isArray(unit) || Object.keys(unit).length !== 2 || !['ml','l','g','kg'].includes(unit.symbol) || typeof unit.factor !== 'number' || !Number.isFinite(unit.factor) || unit.factor <= 0 || unit.factor > 1000000)) throw new Error('Ungültige Einheitenzuordnung.');
                 }
                 if (key === 'popularQueries') localized(value, terms => Array.isArray(terms) && terms.filter(term => typeof term === 'string' && term.trim()).length <= 10 && terms.every(term => typeof term === 'string' && [...term.trim()].length <= 150));
+                if (key === 'blockedPopularQueries') localized(value, terms => Array.isArray(terms) && terms.length <= 100 && terms.every(term => typeof term === 'string' && [...term.trim()].length <= 60));
                 if (key === 'featuredProductIds') localized(value, ids => Array.isArray(ids) && ids.length <= 10 && new Set(ids).size === ids.length && ids.every(id => typeof id === 'string' && /^[a-f0-9]{32}$/.test(id)));
                 if (key === 'synonyms') localized(value, group => !!group && typeof group === 'object' && !Array.isArray(group) && Object.entries(group).every(([word, terms]) => !!word.trim() && Array.isArray(terms) && terms.length > 0 && terms.every(term => typeof term === 'string' && !!term.trim())));
             } catch (error) { throw new Error('Einstellung ' + key + ': ' + error.message); }
@@ -452,6 +453,27 @@ Shopware.Component.register('sw-meilisearch-query-suggestions', {
     methods: {
         setTerms(text) { if (this.locale) this.$emit('update:value', JSON.stringify({...this.parsed.data, [this.locale]: text === '' ? [] : text.split('\n')})); },
     },
+});
+
+Shopware.Component.register('sw-meilisearch-query-blocklist', {
+    props: {value: {type: String, default: ''}, disabled: {type: Boolean, default: false}},
+    emits: ['update:value'],
+    data() { return {locale: ''}; },
+    computed: {
+        parsed() { const x = parseSetting(this.value, {}, 'object'); if (x.valid && Object.values(x.data).some(v => !Array.isArray(v) || v.some(t => typeof t !== 'string'))) x.valid = false; return x; },
+        terms() { return (this.parsed.data[this.locale] || []).join('\n'); },
+        blocklistError() { const terms = this.parsed.data[this.locale] || []; return terms.length > 100 ? 'Höchstens 100 Sperrbegriffe je Sprache sind erlaubt.' : (terms.some(term => [...term.trim()].length > 60) ? 'Ein Sperrbegriff darf höchstens 60 Zeichen lang sein.' : ''); },
+    },
+    template: `
+      <div class="sw-meilisearch-config">
+        <template v-if="parsed.valid">
+          <p class="sw-meilisearch-config__help">Suchanfragen, die einen dieser Begriffe enthalten, werden nicht automatisch gezählt oder als Vorschlag angezeigt. Ein Eintrag pro Zeile.</p>
+          <sw-meilisearch-locale-select v-model:value="locale" />
+          <label>Gesperrte Begriffe <textarea :value="terms" :disabled="disabled || !locale" rows="4" class="sw-meilisearch-config__input" @input="setTerms($event.target.value)"></textarea></label><p v-if="blocklistError" role="alert" class="sw-meilisearch-config__error">{{ blocklistError }}</p>
+        </template>
+        <template v-else><p role="alert" class="sw-meilisearch-config__error">Die bestehende Sperrliste ist ungültig und muss korrigiert werden.</p><textarea class="sw-meilisearch-config__input" :value="value" :disabled="disabled" @input="$emit('update:value', $event.target.value)"></textarea></template>
+      </div>`,
+    methods: {setTerms(text) { if (this.locale) this.$emit('update:value', JSON.stringify({...this.parsed.data, [this.locale]: text === '' ? [] : text.split('\n')})); }},
 });
 
 Shopware.Component.register('sw-meilisearch-featured-products', {

@@ -23,8 +23,8 @@ const unitB = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
   },{unitA,unitB});
   await page.addScriptTag({content:script});
   await page.evaluate(() => {
-   const root={data(){return {global:'', language:JSON.stringify({'en-GB':['name','customFields.legacy_field']}), units:JSON.stringify({[window.fixture.unitA]:{symbol:'ml',factor:1}}), suggestions:JSON.stringify({'en-GB':['flower']}), featured:JSON.stringify({'en-GB':[window.fixture.unitA]}), synonyms:'',disabled:false};},
-    template:`<div><section id="global"><sw-meilisearch-index-fields v-model:value="global" :disabled="disabled" /></section><section id="language"><sw-meilisearch-language-fields v-model:value="language" :disabled="disabled" /></section><section id="units"><sw-meilisearch-quantity-units v-model:value="units" :disabled="disabled" /></section><section id="synonyms"><sw-meilisearch-synonyms v-model:value="synonyms" :disabled="disabled" /></section><section id="suggestions"><sw-meilisearch-query-suggestions v-model:value="suggestions" :disabled="disabled" /></section><section id="featured"><sw-meilisearch-featured-products v-model:value="featured" :disabled="disabled" /></section></div>`};
+   const root={data(){return {global:'', language:JSON.stringify({'en-GB':['name','customFields.legacy_field']}), units:JSON.stringify({[window.fixture.unitA]:{symbol:'ml',factor:1}}), suggestions:JSON.stringify({'en-GB':['flower']}), featured:JSON.stringify({'en-GB':[window.fixture.unitA]}), synonyms:'',blocked:JSON.stringify({'en-GB':['forbidden']}),disabled:false};},
+    template:`<div><section id="global"><sw-meilisearch-index-fields v-model:value="global" :disabled="disabled" /></section><section id="language"><sw-meilisearch-language-fields v-model:value="language" :disabled="disabled" /></section><section id="units"><sw-meilisearch-quantity-units v-model:value="units" :disabled="disabled" /></section><section id="synonyms"><sw-meilisearch-synonyms v-model:value="synonyms" :disabled="disabled" /></section><section id="suggestions"><sw-meilisearch-query-suggestions v-model:value="suggestions" :disabled="disabled" /></section><section id="blocked"><sw-meilisearch-query-blocklist v-model:value="blocked" :disabled="disabled" /></section><section id="featured"><sw-meilisearch-featured-products v-model:value="featured" :disabled="disabled" /></section></div>`};
    const app=Vue.createApp(root);
    for (const [name,component] of Object.entries(window.fixture.components)) app.component(name,component);
    app.component('sw-button',{props:['disabled'],emits:['click'],template:'<button :disabled="disabled" @click="$emit(\'click\')"><slot/></button>'});
@@ -92,6 +92,11 @@ const unitB = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
   await page.evaluate(()=>{window.fixture.vm.featured='{invalid'});
   assert(await page.locator('#featured [role=alert]').isVisible());
   assert.equal(await page.locator('#featured textarea').inputValue(),'{invalid');
+  assert.deepEqual(JSON.parse(await page.evaluate(()=>window.fixture.vm.blocked)),{'en-GB':['forbidden']},'Existing blocklist must not change on load');
+  await page.locator('#blocked').getByLabel('Gesperrte Begriffe').fill('sensibel\nunerwünscht');
+  assert.deepEqual(JSON.parse(await page.evaluate(()=>window.fixture.vm.blocked)),{'en-GB':['forbidden'],'de-DE':['sensibel','unerwünscht']});
+  await page.locator('#blocked').getByLabel('Sprache auswählen').selectOption('en-GB');
+  assert.equal(await page.locator('#blocked').getByLabel('Gesperrte Begriffe').inputValue(),'forbidden');
   await page.locator('#synonyms').getByLabel('Suchbegriff', {exact:true}).fill('Blume');
   await page.locator('#synonyms').getByLabel('Synonyme (durch Komma getrennt)').fill('Blüte, Pflanze');
   await page.locator('#synonyms').getByRole('button',{name:'Hinzufügen'}).click();

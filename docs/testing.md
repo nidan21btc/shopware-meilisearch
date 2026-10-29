@@ -20,6 +20,10 @@ CI installs isolated Shopware 6.7.14.0 dependencies from the committed lock file
 it does not start a Shopware shop or run the database-writing integration suite.
 CI checks supplement the installation and acceptance checks below.
 
+## Static analysis
+
+After installing the isolated `.github/ci` dependencies, run `.github/ci/vendor/bin/phpstan analyse -c phpstan.neon --no-progress`. CI enforces PHPStan level 1 without a baseline. Higher levels currently report existing type issues that require separate review.
+
 ## Fast regression checks
 
 ```sh

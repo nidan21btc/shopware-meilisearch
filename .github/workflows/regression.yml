@@ -26,6 +26,8 @@ jobs:
         run: composer install --working-dir=.github/ci --no-interaction --no-scripts --prefer-dist --no-progress
       - name: Check PHP source syntax
         run: find src tests -type f -name '*.php' -print0 | xargs -0 -n1 php -l > /dev/null
+      - name: Run PHPStan static analysis
+        run: .github/ci/vendor/bin/phpstan analyse -c phpstan.neon --no-progress --memory-limit=1G
       - name: Run fast regression checks
         env:
           SHOPWARE_ROOT: ${{ github.workspace }}/.github/ci

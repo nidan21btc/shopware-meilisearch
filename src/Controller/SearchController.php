@@ -43,17 +43,23 @@ class SearchController extends StorefrontController
         try {
             $result = $this->search->search($input, $context);
             $popular = Discovery::suggestions($this->config->getString('ShopwareMeilisearch.config.popularQueries', $context->getSalesChannelId()), $context->getLanguageInfo()->localeCode);
+            $proof = null;
             try {
-                if ($request->query->getString('recordPopular') === '1' && $result['total'] > 0 && $input->page === 1 && $input->manufacturers === [] && $input->categories === []) {
-                    $this->popularSearches->record($context->getSalesChannelId(), $context->getLanguageId(), $input->query);
-                }
-                $automatic = $this->popularSearches->suggestions($context->getSalesChannelId(), $context->getLanguageId());
+                $blocked = PopularSearches::blocklist($this->config->getString('ShopwareMeilisearch.config.blockedPopularQueries', $context->getSalesChannelId()), $context->getLanguageInfo()->localeCode);
+                $automatic = $this->popularSearches->suggestions($context->getSalesChannelId(), $context->getLanguageId(), $blocked);
                 if ($automatic !== []) $popular = $automatic;
+                $normalized = PopularSearches::normalize($input->query);
+                if ($normalized !== null && !PopularSearches::blocked($normalized, $blocked) && $result['total'] > 0 && $input->page === 1 && $input->manufacturers === [] && $input->categories === [] && $request->hasSession()) {
+                    $session = $request->getSession();
+                    if (!$session->isStarted()) $session->start();
+                    if ($session->getId() !== '') $proof = $this->popularSearches->proof($context->getSalesChannelId(), $context->getLanguageId(), $normalized, $session->getId());
+                }
             } catch (\Throwable $error) {
                 // Analytics must never prevent a successful product search.
                 $this->logger->warning('Popular search aggregation unavailable', ['exceptionClass' => $error::class]);
             }
             $response = $this->renderStorefront('@ShopwareMeilisearch/storefront/search/results.html.twig', ['result' => $result, 'input' => $input, 'popularQueries' => $popular]);
+            if ($proof !== null) $response->headers->set('X-Shopware-Search-Proof', $proof);
         } catch (\Throwable $error) {
             $this->logger->error('Local search failed', ['exceptionClass' => $error::class, 'salesChannelId' => $context->getSalesChannelId(), 'languageId' => $context->getLanguageId()]);
             $response = $this->renderStorefront('@ShopwareMeilisearch/storefront/search/error.html.twig', ['query' => $input->query]);
@@ -64,4 +70,27 @@ class SearchController extends StorefrontController
 
         return $response;
     }
+
+    #[Route(path: '/shopware-meilisearch/popular', name: 'frontend.shopware.meilisearch.popular', methods: ['POST'], defaults: ['XmlHttpRequest' => true, '_httpCache' => false])]
+    public function recordPopular(Request $request, SalesChannelContext $context): Response
+    {
+        if (!$this->config->getBool('ShopwareMeilisearch.config.enabled', $context->getSalesChannelId())) throw new NotFoundHttpException();
+        if (($denied = $this->guard->enter($request)) !== null) return $denied;
+        try {
+            if (strlen($request->getContent()) > 1024 || !$request->hasPreviousSession() || !$request->hasSession()) return new Response('', 400);
+            $body = $request->toArray();
+            if (!isset($body['q'], $body['proof']) || !is_string($body['q']) || !is_string($body['proof'])) return new Response('', 400);
+            $query = PopularSearches::normalize($body['q']);
+            $session = $request->getSession();
+            if (!$session->isStarted()) $session->start();
+            if ($query === null || !$this->popularSearches->validProof($body['proof'], $context->getSalesChannelId(), $context->getLanguageId(), $query, $session->getId())) return new Response('', 400);
+            $blocked = PopularSearches::blocklist($this->config->getString('ShopwareMeilisearch.config.blockedPopularQueries', $context->getSalesChannelId()), $context->getLanguageInfo()->localeCode);
+            $this->popularSearches->record($context->getSalesChannelId(), $context->getLanguageId(), $query, $session->getId(), $blocked);
+            return new Response('', 204, ['Cache-Control' => 'private, no-store']);
+        } catch (\Throwable $error) {
+            $this->logger->warning('Popular search recording unavailable', ['exceptionClass' => $error::class]);
+            return new Response('', 400, ['Cache-Control' => 'private, no-store']);
+        }
+    }
+
 }

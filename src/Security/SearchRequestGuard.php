@@ -16,7 +16,7 @@ final class SearchRequestGuard implements EventSubscriberInterface
     private const ATTRIBUTE = '_shopware_meilisearch_lease';
     private const TTL = 120;
     private const LOCK_WAIT_NS = 100_000_000;
-    public function __construct(private readonly string $directory, private int $concurrency = 2, private int $globalRate = 2, private int $clientRate = 2, private readonly ?AdmissionMetrics $metrics = null, private readonly ?DatabaseConfiguration $configuration = null) {
+    public function __construct(private readonly string $directory, private int $concurrency = 10, private int $globalRate = 10, private int $clientRate = 5, private readonly ?AdmissionMetrics $metrics = null, private readonly ?DatabaseConfiguration $configuration = null) {
         if ($concurrency < 1 || $concurrency > 10 || $globalRate < 1 || $globalRate > 10 || $clientRate < 1 || $clientRate > 10) throw new \InvalidArgumentException('Search admission limits must be between 1 and 10.');
     }
 
@@ -27,7 +27,7 @@ final class SearchRequestGuard implements EventSubscriberInterface
 
     public function onRequest(RequestEvent $event): void
     {
-        if (!$event->isMainRequest() || !preg_match('~/shopware-meilisearch/?$~D', rawurldecode($event->getRequest()->getPathInfo()))) return;
+        if (!$event->isMainRequest() || !preg_match('~/shopware-meilisearch(?:/popular)?/?$~D', rawurldecode($event->getRequest()->getPathInfo()))) return;
         if (($response = $this->enter($event->getRequest())) !== null) $event->setResponse($response);
     }
 

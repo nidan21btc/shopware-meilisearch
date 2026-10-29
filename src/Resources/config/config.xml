@@ -36,6 +36,11 @@
             <label>Suchvorschläge je Sprache</label>
             <helpText>Optionale Vorschläge beim Öffnen der Suche; ein Eintrag pro Zeile.</helpText>
         </component>
+        <component name="sw-meilisearch-query-blocklist">
+            <name>blockedPopularQueries</name>
+            <label>Gesperrte automatische Suchvorschläge je Sprache</label>
+            <helpText>Ein gesperrter Begriff pro Zeile; Suchanfragen, die ihn enthalten, werden nicht automatisch angezeigt oder neu gezählt.</helpText>
+        </component>
         <component name="sw-meilisearch-featured-products">
             <name>featuredProductIds</name>
             <label>Startprodukte je Sprache</label>

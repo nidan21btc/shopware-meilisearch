@@ -519,7 +519,7 @@ Before considering the setup usable:
    successful timestamp advances. HTTP 202 means queued, not completed.
 5. Test a small representative parallel workload, including users sharing an IP,
    while watching CPU, available RAM and request errors. The default admission
-   concurrency is two; tune it deliberately using [configuration](configuration.md).
+   concurrency is ten; tune it deliberately using [configuration](configuration.md).
 6. Restart the search service deliberately and confirm it recovers without an
    open SSH terminal. Check boot-time behavior during an appropriate maintenance
    window; do not reboot a shared production VPS just to follow this guide.

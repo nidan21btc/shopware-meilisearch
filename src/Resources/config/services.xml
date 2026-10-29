@@ -9,9 +9,9 @@
         <parameter key="env(SHOPWARE_MEILISEARCH_SEARCH_KEY_FILE)"></parameter>
         <parameter key="env(SHOPWARE_MEILISEARCH_STATUS_KEY)"></parameter>
         <parameter key="env(SHOPWARE_MEILISEARCH_STATUS_KEY_FILE)"></parameter>
-        <parameter key="env(SHOPWARE_MEILISEARCH_CONCURRENCY)">2</parameter>
-        <parameter key="env(SHOPWARE_MEILISEARCH_GLOBAL_RATE)">2</parameter>
-        <parameter key="env(SHOPWARE_MEILISEARCH_CLIENT_RATE)">2</parameter>
+        <parameter key="env(SHOPWARE_MEILISEARCH_CONCURRENCY)">10</parameter>
+        <parameter key="env(SHOPWARE_MEILISEARCH_GLOBAL_RATE)">10</parameter>
+        <parameter key="env(SHOPWARE_MEILISEARCH_CLIENT_RATE)">5</parameter>
     </parameters>
     <services>
         <service id="shopware_meilisearch.status_secret" class="ShopwareMeilisearch\Security\Secret"><argument>%env(string:SHOPWARE_MEILISEARCH_STATUS_KEY)%</argument><argument>%env(string:SHOPWARE_MEILISEARCH_STATUS_KEY_FILE)%</argument></service>
@@ -44,7 +44,7 @@
             <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
             <argument type="service" id="logger"/>
         </service>
-        <service id="ShopwareMeilisearch\Search\PopularSearches"><argument type="service" id="Doctrine\DBAL\Connection"/></service>
+        <service id="ShopwareMeilisearch\Search\PopularSearches"><argument type="service" id="Doctrine\DBAL\Connection"/><argument>%kernel.secret%</argument></service>
         <service id="ShopwareMeilisearch\Controller\SearchController" public="true">
             <argument type="service" id="ShopwareMeilisearch\Search\SearchService"/>
             <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>

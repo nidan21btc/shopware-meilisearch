@@ -8,11 +8,11 @@ use Symfony\Component\HttpFoundation\Request;
 
 function verify(bool $ok, string $message): void { if (!$ok) throw new RuntimeException($message); }
 $root = sys_get_temp_dir() . '/search-guard-' . bin2hex(random_bytes(8)); mkdir($root, 0700);
-$guard = new SearchRequestGuard($root);
+$guard = new SearchRequestGuard($root, 2, 2, 2);
 $r = static fn(string $ip): Request => Request::create('/de/shopware-meilisearch', 'GET', [], [], [], ['REMOTE_ADDR' => $ip, 'HTTP_X_FORWARDED_FOR' => '192.0.2.99']);
 try {
  $a=$r('192.0.2.1'); $b=$r('192.0.2.2'); $c=$r('192.0.2.3');
- verify($guard->enter($a)===null && (new SearchRequestGuard($root))->enter($b)===null, 'Two independent workers must share capacity');
+ verify($guard->enter($a)===null && (new SearchRequestGuard($root, 2, 2, 2))->enter($b)===null, 'Two independent workers must share capacity');
  verify($guard->enter($c)?->getStatusCode()===429, 'A third simultaneous search must not run');
  $guard->release($a); verify($guard->enter($c)===null, 'Completed search must free its slot');
  $guard->release($b); $guard->release($c);
