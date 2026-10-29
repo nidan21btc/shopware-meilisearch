@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.1
+
+- Keep precise short-query results and facet counts consistent when applying filters.
+- Extract facet calculation into a dedicated component and add storefront comparison checks.
+- Raise PHPStan analysis to level 5.
+
 ## 0.4.0
 
 - Share overlay searches with query, selected filters and sort order; provide a
