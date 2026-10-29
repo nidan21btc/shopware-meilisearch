@@ -153,16 +153,17 @@ if (dialog && typeof dialog.showModal === 'function') {
             // send intermediate keystrokes or a search whose results failed.
             clearTimeout(popularityTimer);
             const settled = (params.get('q') || '').trim();
-            if (response.ok && settled && page === 1) popularityTimer = setTimeout(async () => {
+            const proof = response.headers.get('X-Shopware-Search-Proof');
+            if (response.ok && proof && settled && page === 1) popularityTimer = setTimeout(async () => {
                 if (!dialog.open || query.value.trim() !== settled) return;
                 const key = `el-search:counted:${dialog.dataset.locale || ''}:${dialog.dataset.endpoint}:${settled.toLocaleLowerCase()}`;
                 try { if (sessionStorage.getItem(key)) return; } catch (_) { if (countedQueries.has(key)) return; }
-                const countUrl = new URL(dialog.dataset.endpoint, window.location.origin);
+                const countUrl = new URL(dialog.dataset.popularEndpoint, window.location.origin);
                 if (countUrl.origin !== window.location.origin) return;
                 countUrl.username = ''; countUrl.password = ''; countUrl.hash = '';
-                countUrl.search = new URLSearchParams({q: settled, recordPopular: '1'}).toString();
+                countUrl.search = '';
                 try {
-                    const tracked = await fetch(countUrl.href, {headers: {'X-Requested-With': 'XMLHttpRequest'}, credentials: 'same-origin', cache: 'no-store'});
+                    const tracked = await fetch(countUrl.href, {method: 'POST', headers: {'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/json'}, body: JSON.stringify({q: settled, proof}), credentials: 'same-origin', cache: 'no-store'});
                     if (tracked.ok) { countedQueries.add(key); try { sessionStorage.setItem(key, '1'); } catch (_) {} }
                 } catch (_) { /* Popularity tracking is optional. */ }
             }, 2500);

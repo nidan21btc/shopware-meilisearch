@@ -22,9 +22,9 @@ from language UUIDs; JSON settings use locale codes, index names use UUIDs.
 | `SHOPWARE_MEILISEARCH_KEY_FILE` | empty | Protected index-writer key file |
 | `SHOPWARE_MEILISEARCH_SEARCH_KEY_FILE` | empty | Protected search-only key file |
 | `SHOPWARE_MEILISEARCH_STATUS_KEY_FILE` | empty | Protected version/task-read key file |
-| `SHOPWARE_MEILISEARCH_CONCURRENCY` | `2` | Installation-wide simultaneous computations; integer 1–10 |
-| `SHOPWARE_MEILISEARCH_GLOBAL_RATE` | `2` | Global token refill rate in requests/second; integer 1–10 |
-| `SHOPWARE_MEILISEARCH_CLIENT_RATE` | `2` | Per-IP short-term refill rate; integer 1–10 |
+| `SHOPWARE_MEILISEARCH_CONCURRENCY` | `10` | Installation-wide simultaneous computations; integer 1–10 |
+| `SHOPWARE_MEILISEARCH_GLOBAL_RATE` | `10` | Global token refill rate in requests/second; integer 1–10 |
+| `SHOPWARE_MEILISEARCH_CLIENT_RATE` | `5` | Per-IP short-term refill rate; integer 1–10 |
 
 For credentials, the corresponding variable without `_FILE` accepts a direct
 value. A configured file takes precedence. Prefer files to reduce accidental
@@ -52,6 +52,7 @@ workers, database and host memory before using it. See [security](security.md).
 | Abweichende Indexfelder je Sprache | `indexFieldsByLanguage` | Locale → field-list overrides | Yes |
 | Mengeneinheiten für die Suche | `quantityUnits` | Unit UUID → symbol and conversion factor | Yes |
 | Synonyme je Sprache | `synonyms` | Locale → word → alternatives | Yes |
+| Sperrliste automatischer Suchvorschläge je Sprache | `blockedPopularQueries` | Locale → Liste gesperrter Textteile, die in automatischen Vorschlägen nicht vorkommen dürfen | No |
 | Suchvorschläge je Sprache | `popularQueries` | Manuelle Vorschläge je Sprache; Fallback, bis automatische Vorschläge verfügbar sind | No |
 | Startprodukte je Sprache | `featuredProductIds` | Locale → up to ten product UUIDs | No |
 
@@ -187,6 +188,8 @@ returns HTTP 429 and `Retry-After: 2`; service/limiter failures return HTTP 503.
 
 ### Automatisch beliebte Suchanfragen
 
-Nach einer erfolgreichen Suche mit Treffern zählt das Plugin lokal einen Suchbegriff, wenn die Eingabe mindestens 2,5 Sekunden unverändert bleibt. Ein Begriff wird pro Browser-Tab und Sprache höchstens einmal während der Sitzung gezählt; das ist keine zuverlässige Abwehr absichtlicher Manipulation. Die Zählung unterscheidet Verkaufskanal und Sprache und speichert weder IP-Adressen noch Kundennummern. Der zusätzliche Abruf unterliegt den Suchlimits. Ohne JavaScript oder bei blockiertem Abruf wird keine Zählung vorgenommen.
+Suchbegriffe mit Treffern können nach einer Eingabepause von 2,5 Sekunden lokal gezählt werden. Die Suchantwort stellt dafür einen kurz gültigen, an die Shopware-Sitzung, Sprache, Verkaufskanal und Suchanfrage gebundenen Nachweis aus. Die Zählung erfolgt über eine separate, schlanke POST-Anfrage und löst keine weitere Produktsuche aus. Der Endpunkt unterliegt den Anfragebegrenzungen. Ohne JavaScript oder bei blockiertem Abruf wird keine Zählung vorgenommen.
 
-Das Plugin zeigt bis zu zehn Begriffe mit mindestens drei Zählungen aus den letzten 30 Kalendertagen. Es speichert nur Begriffe mit 3–60 Zeichen, höchstens vier Wörtern und Buchstaben, Leerzeichen oder Bindestrichen. Diese Einschränkungen verhindern nicht zuverlässig, dass persönliche oder vertrauliche Eingaben gespeichert und bei ausreichender Häufigkeit öffentlich angezeigt werden. Automatisierte Anfragen können die Zählung beeinflussen. Betreiber müssen die datenschutzrechtliche Bewertung und gegebenenfalls Hinweise im Shop selbst vornehmen. Sobald automatische Vorschläge verfügbar sind, ersetzen sie die manuelle Liste; andernfalls bleibt diese als Fallback erhalten. Die Daten werden durch den täglichen Shopware-Scheduler nach 30 Tagen gelöscht und beim Deinstallieren ohne Datenübernahme entfernt.
+Ein Begriff wird erst nach mindestens zehn **unterschiedlichen Sitzungen** innerhalb der letzten 30 Kalendertage als automatischer Vorschlag angezeigt. Dieselbe Sitzung wird für denselben Begriff über diesen Zeitraum nur einmal gezählt. Historische Zählungen ohne Sitzungsnachweis fließen nicht ein. Im Backend können pro Sprache bis zu 100 Sperrbegriffe gepflegt werden; automatische Suchanfragen, die einen Sperrbegriff enthalten, werden nicht neu gezählt und nicht angezeigt. Die Sperrprüfung vereinheitlicht Groß- und Kleinschreibung, deutsche Umlaute sowie Leerzeichen und Bindestriche. Automatische Vorschläge werden bis zu fünf Minuten zwischengespeichert; Änderungen an der Sperrliste greifen bei der nächsten Anzeige unmittelbar. Manuell gepflegte Vorschläge bleiben ein eigenständiger Fallback und werden durch die automatische Sperrliste nicht verändert.
+
+Sitzungen sind kein zuverlässiger Schutz gegen absichtlich erzeugte Mehrfachsitzungen. Eine Sperrliste verhindert nicht zuverlässig die Veröffentlichung unerwünschter oder personenbezogener Eingaben. Es werden Suchtexte und mit dem Anwendungsschlüssel pseudonymisierte Sitzungskennungen gespeichert, keine rohen Sitzungs-IDs oder IP-Adressen in dieser Tabelle. Betreiber müssen Datenschutz, Session-Cookies, Hinweise und Aufbewahrung für ihren Shop prüfen. Der Shopware-Scheduler entfernt abgelaufene Einträge; wenn der Scheduler ausfällt, kann die Löschung verzögert sein. Eine Deinstallation ohne Datenübernahme entfernt die Tabellen.

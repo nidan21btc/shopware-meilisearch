@@ -8,11 +8,11 @@ use Symfony\Component\HttpFoundation\Request;
 
 function verify(bool $ok, string $message): void { if (!$ok) throw new RuntimeException($message); }
 $root = sys_get_temp_dir() . '/search-guard-' . bin2hex(random_bytes(8)); mkdir($root, 0700);
-$guard = new SearchRequestGuard($root);
+$guard = new SearchRequestGuard($root, 2, 2, 2);
 $r = static fn(string $ip): Request => Request::create('/de/shopware-meilisearch', 'GET', [], [], [], ['REMOTE_ADDR' => $ip, 'HTTP_X_FORWARDED_FOR' => '192.0.2.99']);
 try {
  $a=$r('192.0.2.1'); $b=$r('192.0.2.2'); $c=$r('192.0.2.3');
- verify($guard->enter($a)===null && (new SearchRequestGuard($root))->enter($b)===null, 'Two independent workers must share capacity');
+ verify($guard->enter($a)===null && (new SearchRequestGuard($root, 2, 2, 2))->enter($b)===null, 'Two independent workers must share capacity');
  verify($guard->enter($c)?->getStatusCode()===429, 'A third simultaneous search must not run');
  $guard->release($a); verify($guard->enter($c)===null, 'Completed search must free its slot');
  $guard->release($b); $guard->release($c);
@@ -26,6 +26,14 @@ try {
  $spoofed=$r('192.0.2.42');$spoofed->headers->set('X-Forwarded-For','198.51.100.1');
  verify($guard->enter($spoofed)?->getStatusCode()===429,'Untrusted forwarded IP must not bypass client limits');
  $other=$r('192.0.2.77');verify($guard->enter($other)===null,'One client must not consume another client bucket');$guard->release($other);
+ file_put_contents($root.'/admission.json','{}');
+ $defaults = new SearchRequestGuard($root); $defaultActive = [];
+ for ($i=0; $i<10; $i++) { $q=$r('192.0.2.40'); verify($defaults->enter($q)===null,'Default must allow ten concurrent requests'); $defaultActive[]=$q; }
+ verify($defaults->enter($r('192.0.2.41'))?->getStatusCode()===429,'Default must reject an eleventh concurrent request');
+ foreach ($defaultActive as $q) $defaults->release($q);
+ file_put_contents($root.'/admission.json','{}');
+ for ($i=0; $i<15; $i++) { $q=$r('192.0.2.42'); verify($defaults->enter($q)===null,'Default per-IP burst must allow fifteen requests'); $defaults->release($q); }
+ verify($defaults->enter($r('192.0.2.42'))?->getStatusCode()===429,'Default per-IP burst must reject the sixteenth request');
  file_put_contents($root.'/admission.json','{}');
  $shared = new SearchRequestGuard($root, 10, 10, 10); $active = [];
  for($i=0;$i<10;$i++){ $q=$r('192.0.2.50');verify($shared->enter($q)===null,'Ten searches behind one shared IP must fit configured capacity');$active[]=$q; }
