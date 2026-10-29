@@ -20,6 +20,11 @@ CI installs isolated Shopware 6.7.14.0 dependencies from the committed lock file
 it does not start a Shopware shop or run the database-writing integration suite.
 CI checks supplement the installation and acceptance checks below.
 
+Published search fields are cached for 24 hours and warmed after a successful
+index swap. Cross-process warming requires a shared `cache.app` backend. A
+process-local adapter such as Symfony's development `ArrayAdapter` cannot share
+the indexer's entries with web requests; verify the actual production adapter.
+
 ## Static analysis
 
 After installing the isolated `.github/ci` dependencies, run `.github/ci/vendor/bin/phpstan analyse -c phpstan.neon --no-progress`. CI enforces PHPStan level 1 without a baseline. Higher levels currently report existing type issues that require separate review.

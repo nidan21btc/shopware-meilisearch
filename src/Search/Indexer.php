@@ -76,7 +76,8 @@ final class Indexer
             $this->engine->mutate('DELETE', '/indexes/' . $temporary);
         }
         $this->engine->mutate('POST', '/indexes', ['uid' => $temporary, 'primaryKey' => 'id']);
-        $this->engine->mutate('PATCH', '/indexes/' . $temporary . '/settings', DocumentBuilder::settings($synonyms, $fields, $context->getLanguageInfo()->localeCode));
+        $settings = DocumentBuilder::settings($synonyms, $fields, $context->getLanguageInfo()->localeCode);
+        $this->engine->mutate('PATCH', '/indexes/' . $temporary . '/settings', $settings);
 
         $offset = 0;
         $indexed = 0;
@@ -107,8 +108,8 @@ final class Indexer
             $this->engine->mutate('POST', '/indexes', ['uid' => $index, 'primaryKey' => 'id']);
         }
         $this->engine->mutate('POST', '/swap-indexes', [['indexes' => [$index, $temporary]]]);
-        // Discard the old published settings immediately after the atomic swap.
-        try { $this->publishedFields?->invalidate($index); } catch (\Throwable) { /* Cache expiry and request retry cover transient failures. */ }
+        // Publish only after the swap succeeds; concurrent readers recover from stale fields on retry.
+        try { $this->publishedFields?->publish($index, $settings['searchableAttributes']); } catch (\Throwable) { /* Cache expiry and request retry cover transient failures. */ }
         // After the atomic swap, this is the previous generation.
         $this->engine->mutate('DELETE', '/indexes/' . $temporary);
 
