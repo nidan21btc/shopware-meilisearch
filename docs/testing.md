@@ -46,7 +46,7 @@ unit discovery passed 56 tests. Admission checks separately cover cross-worker
 slots, global/IP bursts, untrusted forwarding headers, configured ten-slot shared-IP
 capacity, fail-closed state and credential-file permissions. Counts are evidence
 for that baseline, not a claim that every integration script was executed.
-Admission lock contention is retried for at most 100 ms; the tests also verify
+Admission lock contention is retried for at most 250 ms; the tests also verify
 that brief contention succeeds and a stalled lock still rejects requests.
 
 The Python suite uses temporary local sockets/HTTP servers and invokes PHP for

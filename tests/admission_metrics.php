@@ -66,33 +66,37 @@ try {
  }
  // Five independent PHP workers hold real admission slots concurrently.
  if (function_exists('pcntl_fork')) {
+  for ($round=0;$round<30;$round++) {
   $workers=[];
+  $parallelPath=$root.'/parallel-'.$round;
   for($i=0;$i<5;$i++) {
    $pid=pcntl_fork();
    if($pid===-1)break;
    if($pid===0) {
-    $parallel=new SearchRequestGuard($root.'/parallel',5,10,10,$metrics);
+    $parallel=new SearchRequestGuard($parallelPath,5,10,10,$metrics);
     $q=$request('192.0.2.50');$until=hrtime(true)+30_000_000_000;
     $denied=$parallel->enter($q);
     if($denied!==null){fwrite(STDERR,"Parallel worker $i denied: HTTP ".$denied->getStatusCode()."\n");exit(2);}
-    touch($root.'/ready-'.$i);
-    do {clearstatcache(true, $root.'/release'); if(is_file($root.'/release'))break; usleep(1000);} while(hrtime(true)<$until);
-    $parallel->release($q);exit(is_file($root.'/release') ? 0 : 3);
+    touch($root.'/ready-'.$round.'-'.$i);
+    do {clearstatcache(true, $root.'/release-'.$round); if(is_file($root.'/release-'.$round))break; usleep(1000);} while(hrtime(true)<$until);
+    $parallel->release($q);exit(is_file($root.'/release-'.$round) ? 0 : 3);
    }
    $workers[]=$pid;
   }
   // Workers must outlive the parent's full readiness deadline, including on slow CI hosts.
   $until=hrtime(true)+10_000_000_000;
-  while(count($workers)===5 && count(glob($root.'/ready-*'))<5 && hrtime(true)<$until)usleep(1000);
-  $ready=count(glob($root.'/ready-*'))===5;
-  $extra=$ready ? (new SearchRequestGuard($root.'/parallel',5,10,10,$metrics))->enter($request('192.0.2.51')) : null;
-  touch($root.'/release');
+  while(count($workers)===5 && count(glob($root.'/ready-'.$round.'-*'))<5 && hrtime(true)<$until)usleep(1000);
+  $ready=count(glob($root.'/ready-'.$round.'-*'))===5;
+  $extra=$ready ? (new SearchRequestGuard($parallelPath,5,10,10,$metrics))->enter($request('192.0.2.51')) : null;
+  touch($root.'/release-'.$round);
   $failed=[];
   foreach($workers as $pid){$waited=pcntl_waitpid($pid,$status);if($waited!==$pid || !pcntl_wifexited($status) || pcntl_wexitstatus($status)!==0)$failed[]=$pid.':'.($waited===$pid && pcntl_wifexited($status) ? pcntl_wexitstatus($status) : 'abnormal');}
   check(count($workers)===5,'Could not fork all parallel workers');
-  check($failed===[],'Parallel workers failed (PID:exit): '.implode(', ', $failed));
+  $parallelState=json_decode(file_get_contents($root.'/metrics/metrics.json'),true);
+  check($failed===[],'Parallel workers failed (PID:exit): '.implode(', ', $failed).'; admission counts: '.json_encode($parallelState['counts'] ?? []));
   check($ready && $extra?->getStatusCode()===429,'Five workers fit and sixth is rejected');
   check(json_decode(file_get_contents($root.'/metrics/metrics.json'),true)['peak']===5,'Sampled peak across five worker processes');
+  }
  }
  // Logging failures must not reject an otherwise admitted request.
  $brokenLogger=new class extends \Psr\Log\AbstractLogger { public function log($level, string|\Stringable $message, array $context=[]): void {throw new RuntimeException('synthetic logging failure');} };
