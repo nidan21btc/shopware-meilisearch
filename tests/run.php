@@ -330,6 +330,14 @@ check(array_column(QuantityRelevance::promoteCombined($combinedHits, 'ml:30', ['
 check(array_column(QuantityRelevance::promoteCombined($combinedHits, 'ml:30', ['matching'=>['Bach','Blüten']], 'Bach Blüten'), 'id')[0] === 'other', 'Phrase words must match within the same field');
 check(array_column(QuantityRelevance::preciseCombined([['id'=>'exact','_rankingScoreDetails'=>['typo'=>['typoCount'=>0]]],['id'=>'typo','_rankingScoreDetails'=>['typo'=>['typoCount'=>1]]]]), 'id') === ['exact'], 'Combined search keeps precise words when available');
 check(QuantityRelevance::preciseCombined([['id'=>'typo','_rankingScoreDetails'=>['typo'=>['typoCount'=>1]]]])[0]['id'] === 'typo', 'Keep fallback hits if no precise match exists');
+foreach (['Emerg 30 ml', 'Rose 10 ml', 'Oel 10 ml'] as $combinedQuery) {
+    $phrase = PartialMatches::quantityPhrase($combinedQuery);
+    check($phrase !== null && QuantityRelevance::usesPreciseCombined($phrase), 'Short combined product phrase uses precise matching: '.$combinedQuery);
+    $sample = [['id'=>'exact', '_rankingScoreDetails'=>['typo'=>['typoCount'=>0]]], ['id'=>'typo', '_rankingScoreDetails'=>['typo'=>['typoCount'=>1]]]];
+    check(array_column(QuantityRelevance::preciseCombined($sample), 'id') === ['exact'], 'Short combined product phrase excludes typo matches when exact matches exist');
+}
+check(!QuantityRelevance::usesPreciseCombined('Emergency') && !QuantityRelevance::usesPreciseCombined('ab'), 'Precision applies only to single 3–5-letter product terms');
+
 check(QuantityRelevance::reorder([['id'=>'unknown']], 'ml:1') === [['id'=>'unknown']], 'Missing ranking metadata retains the original order');
 
 check(QuantityUnits::tokens(str_repeat('f', 32), 0.01, $quantityUnits) === [], 'Do not guess unknown units');
@@ -461,11 +469,30 @@ $retryHttp = new MockHttpClient(static function ($method, $url, $options) use (&
 });
 $retryEngine = new Engine($retryHttp, 'http://127.0.0.1:7700', 'test-key');
 $retryFields = new \ShopwareMeilisearch\Search\PublishedSearchFields($retryEngine, new \Symfony\Component\Cache\Adapter\ArrayAdapter());
-$retrySearch = new \ShopwareMeilisearch\Search\SearchRequest($retryEngine, $retryFields);
+$retryLog = new \Monolog\Logger('test');
+$retryHandler = new \Monolog\Handler\TestHandler();
+$retryLog->pushHandler($retryHandler);
+$retrySearch = new \ShopwareMeilisearch\Search\SearchRequest($retryEngine, $retryFields, $retryLog);
 $retryCount = 0;
 $retryResult = $retrySearch->execute('index-a', ['q'=>'oel','attributesToSearchOn'=>['missing']], 'Öl', $retryCount);
 check(($retryResult['hits'][0]['id'] ?? '') === 'ok' && $retryCount === 2, 'Stale field restriction retries exactly once');
 check(!isset($retryCalls[1]['attributesToSearchOn']) && $retryCalls[1]['q'] === 'Öl', 'Retry uses original query without stale restriction');
+check($retryHandler->hasWarningRecords() && ($retryHandler->getRecords()[0]['context']['index'] ?? '') === 'index-a', 'Retry logs a warning with the index');
+foreach ([['other_error', true, 1], ['invalid_search_attributes_to_search_on', false, 1], ['invalid_search_attributes_to_search_on', true, 2]] as [$errorCode, $restricted, $expectedCalls]) {
+    $failureCount = 0;
+    $faultHttp = new MockHttpClient(static function () use (&$failureCount, $errorCode) {
+        ++$failureCount;
+        return new MockResponse(json_encode(['code'=>$errorCode]), ['http_code'=>400]);
+    });
+    $faultEngine = new Engine($faultHttp, 'http://127.0.0.1:7700', 'test-key');
+    $faultFields = new \ShopwareMeilisearch\Search\PublishedSearchFields($faultEngine, new \Symfony\Component\Cache\Adapter\ArrayAdapter());
+    $faultSearch = new \ShopwareMeilisearch\Search\SearchRequest($faultEngine, $faultFields, new \Psr\Log\NullLogger());
+    $payload = ['q'=>'test']; if ($restricted) $payload['attributesToSearchOn'] = ['name'];
+    $calls = 0; $caught = false;
+    try { $faultSearch->execute('index-a', $payload, 'test', $calls); } catch (\Symfony\Contracts\HttpClient\Exception\ClientExceptionInterface) { $caught = true; }
+    check($caught && $calls === $expectedCalls && $failureCount === $expectedCalls, 'Only the specific stale-field error can retry, at most once');
+}
+
 
 $requests = [];
 $responses = [

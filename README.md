@@ -27,6 +27,12 @@ tab. Product cards use Shopware's cart and icon system. Voice input is offered
 only when the browser exposes an explicit local speech-recognition capability;
 there is no cloud fallback.
 
+For combined searches with a 3–5-letter product term and a quantity, such as
+`Emerg 30 ml`, the search hides typo matches when at least one exact match
+exists. If no exact match exists, typo matches remain available. This applies
+to terms such as `Rose` and `Oel` as well. See [Configuration](docs/configuration.md)
+for quantity handling and index rebuild requirements.
+
 ## Documentation
 
 | Guide | Contents |

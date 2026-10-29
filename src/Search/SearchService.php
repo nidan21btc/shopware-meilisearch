@@ -90,7 +90,7 @@ final class SearchService
             $hits = TypoRelevance::reorder($hits);
             $phrase = PartialMatches::quantityPhrase($input->query);
             if ($phrase !== null && $quantityKey !== null) {
-                if (preg_match('/^\p{L}{3,5}$/uD', $phrase)) $hits = QuantityRelevance::preciseCombined($hits);
+                if (QuantityRelevance::usesPreciseCombined($phrase)) $hits = QuantityRelevance::preciseCombined($hits);
                 try {
                     $relevant = array_filter(array_slice($hits, 0, 1000), static fn (array $hit): bool => ($hit['quantityKey'] ?? null) === $quantityKey);
                     $ids = array_values(array_filter(array_column($relevant, 'id'), static fn ($id) => is_string($id) && preg_match('/^[a-f0-9]{32}$/D', $id)));

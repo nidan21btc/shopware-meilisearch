@@ -5,7 +5,16 @@ namespace ShopwareMeilisearch\Search;
 /** Prefer an explicitly requested exact physical amount among equally matched results. */
 final class QuantityRelevance
 {
-    /** A combined quantity search uses unaltered product words when available. */
+    /**
+     * For 3–5-letter product phrases with a quantity, hide typo matches if at
+     * least one exact match exists. If none exist, retain typo matches so a
+     * misspelling can still find products; unavailable metadata preserves order.
+     */
+    public static function usesPreciseCombined(string $phrase): bool
+    {
+        return (bool) preg_match('/^\p{L}{3,5}$/uD', $phrase);
+    }
+
     public static function preciseCombined(array $hits): array
     {
         $exact = [];
