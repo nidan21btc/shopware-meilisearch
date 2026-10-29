@@ -275,20 +275,27 @@ final class SearchService
             return $empty;
         }
 
-        // A facet ignores its own selections (OR within that facet) but must
-        // reflect the other facet and the current price range.
-        $manufacturerFacets = $this->filteredFacet('manufacturer', 'manufacturerId', $this->manufacturers, $allCandidates, $familyMap, $familyPrimaryIds, $input, $displayedPrices ?? [], $context);
-        $categoryFacets = $this->filteredFacet('category', 'categoriesRo.id', $this->categories, $allCandidates, $familyMap, $familyPrimaryIds, $input, $displayedPrices ?? [], $context);
-        if ($preciseIds !== null && !$input->includeSimilar) {
-            // A facet choice may leave fewer precise hits than the threshold,
-            // in which case the result view automatically includes similar
-            // hits. Conversely another choice can restore the precise view.
-            $preciseManufacturers = $hasSimilar ? $manufacturerFacets : $this->filteredFacet('manufacturer', 'manufacturerId', $this->manufacturers, $preciseIds, $familyMap, $familyPrimaryIds, $input, $displayedPrices ?? [], $context);
-            $preciseCategories = $hasSimilar ? $categoryFacets : $this->filteredFacet('category', 'categoriesRo.id', $this->categories, $preciseIds, $familyMap, $familyPrimaryIds, $input, $displayedPrices ?? [], $context);
-            $allManufacturers = $hasSimilar ? $this->filteredFacet('manufacturer', 'manufacturerId', $this->manufacturers, $unrestrictedCandidates, $familyMap, $familyPrimaryIds, $input, $displayedPrices ?? [], $context) : $manufacturerFacets;
-            $allCategories = $hasSimilar ? $this->filteredFacet('category', 'categoriesRo.id', $this->categories, $unrestrictedCandidates, $familyMap, $familyPrimaryIds, $input, $displayedPrices ?? [], $context) : $categoryFacets;
-            $manufacturerFacets = self::precisionFacetCounts($preciseManufacturers, $allManufacturers, $minimumPrecise);
-            $categoryFacets = self::precisionFacetCounts($preciseCategories, $allCategories, $minimumPrecise);
+        // The discovery template does not render facets. Avoid aggregating the
+        // entire catalog just to show the initial product carousel. Explicit
+        // filter requests retain the ordinary facet behavior.
+        $manufacturerFacets = [];
+        $categoryFacets = [];
+        if ($input->query !== '' || $hasFilters) {
+            // A facet ignores its own selections (OR within that facet) but must
+            // reflect the other facet and the current price range.
+            $manufacturerFacets = $this->filteredFacet('manufacturer', 'manufacturerId', $this->manufacturers, $allCandidates, $familyMap, $familyPrimaryIds, $input, $displayedPrices ?? [], $context);
+            $categoryFacets = $this->filteredFacet('category', 'categoriesRo.id', $this->categories, $allCandidates, $familyMap, $familyPrimaryIds, $input, $displayedPrices ?? [], $context);
+            if ($preciseIds !== null && !$input->includeSimilar) {
+                // A facet choice may leave fewer precise hits than the threshold,
+                // in which case the result view automatically includes similar
+                // hits. Conversely another choice can restore the precise view.
+                $preciseManufacturers = $hasSimilar ? $manufacturerFacets : $this->filteredFacet('manufacturer', 'manufacturerId', $this->manufacturers, $preciseIds, $familyMap, $familyPrimaryIds, $input, $displayedPrices ?? [], $context);
+                $preciseCategories = $hasSimilar ? $categoryFacets : $this->filteredFacet('category', 'categoriesRo.id', $this->categories, $preciseIds, $familyMap, $familyPrimaryIds, $input, $displayedPrices ?? [], $context);
+                $allManufacturers = $hasSimilar ? $this->filteredFacet('manufacturer', 'manufacturerId', $this->manufacturers, $unrestrictedCandidates, $familyMap, $familyPrimaryIds, $input, $displayedPrices ?? [], $context) : $manufacturerFacets;
+                $allCategories = $hasSimilar ? $this->filteredFacet('category', 'categoriesRo.id', $this->categories, $unrestrictedCandidates, $familyMap, $familyPrimaryIds, $input, $displayedPrices ?? [], $context) : $categoryFacets;
+                $manufacturerFacets = self::precisionFacetCounts($preciseManufacturers, $allManufacturers, $minimumPrecise);
+                $categoryFacets = self::precisionFacetCounts($preciseCategories, $allCategories, $minimumPrecise);
+            }
         }
         // Hide only this sales channel's navigation root; other categories and
         // the indexed data remain unchanged. Apply after merging both facet sets.
