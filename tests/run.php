@@ -72,7 +72,7 @@ check(PartialMatches::append([$one], [[['id' => $one], ['id' => $three]], [['id'
 check(!PartialMatches::hideParent($one, $two, [$one => true]), 'A partial variant must not hide a primary parent');
 check(PartialMatches::hideParent($one, $two, [$one => true, $two => true]) && PartialMatches::hideParent($one, $two, []), 'Ordinary parent and variant deduplication remains active');
 foreach (['Bachblüten'=>'bachblueten','BACHBLÜTEN'=>'bachblueten','Fuß'=>'fuss','Größe'=>'groesse',"Blu\u{0308}ten"=>'blueten','RQ7'=>'rq7','B-10'=>'b-10','9781234567890'=>'9781234567890',''=>'', 'Rescue'=>'rescue','Blue'=>'blue','Bluebell'=>'bluebell','Feuer'=>'feuer','Queen'=>'queen','Aqua'=>'aqua','Essenz'=>'essenz','Mass'=>'mass','Poesie'=>'poesie'] as $input=>$expected) check(SearchFold::text((string) $input) === $expected, 'Deterministic one-way folding: '.$input);
-check(SearchFold::usesAliases('Bachblüten') && SearchFold::usesAliases('Bachblueten 10 ml') && !SearchFold::usesAliases('Blue') && !SearchFold::usesAliases('Feuer') && !SearchFold::usesAliases('Rescue') && !SearchFold::usesAliases('RQ7'), 'Avoid unrelated short and code prefixes when enabling folded fields');
+check(SearchFold::usesAliases('Bachblüten') && SearchFold::usesAliases('Bachblueten 10 ml') && SearchFold::usesAliases('Oel') && SearchFold::usesAliases('Muesli') && !SearchFold::usesAliases('Queen') && !SearchFold::usesAliases('Blue') && !SearchFold::usesAliases('Feuer') && !SearchFold::usesAliases('Rescue') && !SearchFold::usesAliases('RQ7'), 'Enable needed spellings while avoiding unrelated short and code prefixes');
 check(SearchFold::aliases('Feuer und Wasser') === '' && SearchFold::aliases('Bachblüten') === 'bachblueten', 'Index folded aliases only when transliteration changes text');
 check(PartialMatches::quantityPhrase('Emergency 30 ml') === 'Emergency' && PartialMatches::quantityPhrase('30 ml Emergency') === 'Emergency' && PartialMatches::quantityPhrase('Emergency 30ml') === 'Emergency', 'Recognize quantities before or after a natural-language phrase');
 foreach (['Emergency ml','Emergency 30','Emergency 10 ml 30 ml','AB-30ml','10 ml','ab 30 ml'] as $invalid) check(PartialMatches::quantityPhrase($invalid) === null, 'Do not promote ambiguous quantities or short names');
@@ -326,6 +326,10 @@ check(array_column(QuantityRelevance::promoteCombined($combinedHits, 'ml:30', $c
 check(QuantityRelevance::promoteCombined($combinedHits, 'ml:30', $combinedNames, 'Emerg') === $combinedHits, 'A prefix cannot match whole product words');
 check(QuantityRelevance::promoteCombined($combinedHits, null, $combinedNames, 'Emergency') === $combinedHits, 'Ambiguous quantity preserves ranking');
 check(QuantityRelevance::wholeWords('Bachblueten', 'Bachblüten Essenz') && !QuantityRelevance::wholeWords('Bachblueten', 'Roll On'), 'Names match all complete folded words');
+check(array_column(QuantityRelevance::promoteCombined($combinedHits, 'ml:30', ['matching'=>['Essenz','Bachblüten']], 'Bachblueten'), 'id')[0] === 'matching', 'A matching category or manufacturer can establish phrase relevance');
+check(array_column(QuantityRelevance::promoteCombined($combinedHits, 'ml:30', ['matching'=>['Bach','Blüten']], 'Bach Blüten'), 'id')[0] === 'other', 'Phrase words must match within the same field');
+check(array_column(QuantityRelevance::preciseCombined([['id'=>'exact','_rankingScoreDetails'=>['typo'=>['typoCount'=>0]]],['id'=>'typo','_rankingScoreDetails'=>['typo'=>['typoCount'=>1]]]]), 'id') === ['exact'], 'Combined search keeps precise words when available');
+check(QuantityRelevance::preciseCombined([['id'=>'typo','_rankingScoreDetails'=>['typo'=>['typoCount'=>1]]]])[0]['id'] === 'typo', 'Keep fallback hits if no precise match exists');
 check(QuantityRelevance::reorder([['id'=>'unknown']], 'ml:1') === [['id'=>'unknown']], 'Missing ranking metadata retains the original order');
 
 check(QuantityUnits::tokens(str_repeat('f', 32), 0.01, $quantityUnits) === [], 'Do not guess unknown units');
@@ -423,6 +427,45 @@ check($settings['displayedAttributes'] === ['id', 'unnamed', 'quantityKey'], 'On
 check($settings['typoTolerance']['disableOnAttributes'] === ['productNumber', 'ean', 'manufacturerNumber', 'quantity', 'nameHyphenAliases'], 'Exact identifiers, quantities and generated name aliases');
 check(json_decode(json_encode(DocumentBuilder::settings([])), true)['synonyms'] === [], 'Empty synonyms encode as JSON object');
 check(str_contains(json_encode(DocumentBuilder::settings([])), '"synonyms":{}'), 'Engine requires object for synonyms');
+
+$settingsRequests = 0;
+$settingsClient = new MockHttpClient(static function () use (&$settingsRequests) {
+    ++$settingsRequests;
+    return new MockResponse('["name","description"]');
+});
+$settingsEngine = new Engine($settingsClient, 'http://127.0.0.1:7700', 'test-key');
+$publishedSettings = new \ShopwareMeilisearch\Search\PublishedSearchFields($settingsEngine, new \Symfony\Component\Cache\Adapter\ArrayAdapter());
+$fetched = false;
+check($publishedSettings->get('index-a', $fetched) === ['name','description'] && $fetched && $settingsRequests === 1, 'Read published fields on cache miss');
+check($publishedSettings->get('index-a', $fetched) === ['name','description'] && !$fetched && $settingsRequests === 1, 'Warm published fields do not contact engine');
+$publishedSettings->invalidate('index-a');
+check($publishedSettings->get('index-a', $fetched) === ['name','description'] && $fetched && $settingsRequests === 2, 'Index publication invalidates cached fields');
+check($publishedSettings->get('index-b', $fetched) === ['name','description'] && $fetched && $settingsRequests === 3, 'Published field caches are isolated by index');
+$settingsFaultCount = 0;
+$faultClient = new MockHttpClient(static function () use (&$settingsFaultCount) {
+    ++$settingsFaultCount;
+    return $settingsFaultCount === 1 ? new MockResponse('{"error":"unavailable"}', ['http_code'=>503]) : new MockResponse('["name"]');
+});
+$faultEngine = new Engine($faultClient, 'http://127.0.0.1:7700', 'test-key');
+$faultFields = new \ShopwareMeilisearch\Search\PublishedSearchFields($faultEngine, new \Symfony\Component\Cache\Adapter\ArrayAdapter());
+try { $faultFields->get('broken-index', $fetched); throw new RuntimeException('Expected settings failure'); } catch (\Symfony\Contracts\HttpClient\Exception\ServerExceptionInterface) { ++$checks; }
+check($faultFields->get('broken-index', $fetched) === ['name'] && $settingsFaultCount === 2, 'Failed settings reads are not cached');
+
+
+$retryCalls = [];
+$retryHttp = new MockHttpClient(static function ($method, $url, $options) use (&$retryCalls) {
+    $retryCalls[] = json_decode($options['body'], true);
+    return count($retryCalls) === 1
+        ? new MockResponse('{"code":"invalid_search_attributes_to_search_on"}', ['http_code' => 400])
+        : new MockResponse('{"hits":[{"id":"ok"}]}');
+});
+$retryEngine = new Engine($retryHttp, 'http://127.0.0.1:7700', 'test-key');
+$retryFields = new \ShopwareMeilisearch\Search\PublishedSearchFields($retryEngine, new \Symfony\Component\Cache\Adapter\ArrayAdapter());
+$retrySearch = new \ShopwareMeilisearch\Search\SearchRequest($retryEngine, $retryFields);
+$retryCount = 0;
+$retryResult = $retrySearch->execute('index-a', ['q'=>'oel','attributesToSearchOn'=>['missing']], 'Öl', $retryCount);
+check(($retryResult['hits'][0]['id'] ?? '') === 'ok' && $retryCount === 2, 'Stale field restriction retries exactly once');
+check(!isset($retryCalls[1]['attributesToSearchOn']) && $retryCalls[1]['q'] === 'Öl', 'Retry uses original query without stale restriction');
 
 $requests = [];
 $responses = [

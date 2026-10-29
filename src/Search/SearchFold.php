@@ -17,8 +17,8 @@ final class SearchFold
     {
         $query = \Normalizer::normalize($query, \Normalizer::FORM_C);
         if ($query === false) return false;
-        if (preg_match('/[äöüÄÖÜßẞ]/u', $query)) return true;
-        return (bool) preg_match('/(?<![\p{L}\p{N}])[\p{L}]{2,}(?:ae|oe|ue)[\p{L}]{2,}(?![\p{L}\p{N}])/iu', $query);
+        if (preg_match('/[äöüÄÖÜßẞ]/u', $query) || preg_match('/ss/iu', $query)) return true;
+        return (bool) preg_match('/(?<![\p{L}\p{N}])(?:(?:ae|oe|ue)[\p{L}]+|[\p{L}]*[^q\W_](?:ae|oe|ue)[\p{L}]{2,})(?![\p{L}\p{N}])/iu', $query);
     }
 
     /** Only fields explicitly configured for search gain a folded companion. */

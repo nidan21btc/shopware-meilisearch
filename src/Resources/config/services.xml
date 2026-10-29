@@ -31,6 +31,8 @@
         <service id="shopware_meilisearch.read_engine" class="ShopwareMeilisearch\Search\Engine">
             <argument type="service" id="http_client"/><argument>%env(string:SHOPWARE_MEILISEARCH_URL)%</argument><argument type="service" id="shopware_meilisearch.search_secret"/><argument>%env(string:SHOPWARE_MEILISEARCH_SOCKET)%</argument><argument></argument><argument type="service" id="ShopwareMeilisearch\Security\DatabaseConfiguration"/><argument>search</argument>
         </service>
+        <service id="ShopwareMeilisearch\Search\PublishedSearchFields"><argument type="service" id="shopware_meilisearch.read_engine"/><argument type="service" id="cache.app"/></service>
+        <service id="ShopwareMeilisearch\Search\SearchRequest"><argument type="service" id="shopware_meilisearch.read_engine"/><argument type="service" id="ShopwareMeilisearch\Search\PublishedSearchFields"/></service>
         <service id="ShopwareMeilisearch\Search\SearchService">
             <argument type="service" id="shopware_meilisearch.read_engine"/>
             <argument type="service" id="sales_channel.product.repository"/>
@@ -43,6 +45,8 @@
             <argument type="service" id="ShopwareMeilisearch\Search\ReferenceUnitLabels"/>
             <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
             <argument type="service" id="logger"/>
+            <argument type="service" id="ShopwareMeilisearch\Search\PublishedSearchFields"/>
+            <argument type="service" id="ShopwareMeilisearch\Search\SearchRequest"/>
         </service>
         <service id="ShopwareMeilisearch\Search\PopularSearches"><argument type="service" id="Doctrine\DBAL\Connection"/><argument>%kernel.secret%</argument><argument type="service" id="cache.app"/></service>
         <service id="ShopwareMeilisearch\Controller\SearchController" public="true">
@@ -98,6 +102,7 @@
             <argument type="service" id="ShopwareMeilisearch\Search\ParentTranslations"/>
             <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
             <argument>%kernel.project_dir%/var/shopware-meilisearch</argument>
+            <argument type="service" id="ShopwareMeilisearch\Search\PublishedSearchFields"/>
         </service>
         <service id="ShopwareMeilisearch\Command\IndexCommand">
             <argument type="service" id="ShopwareMeilisearch\Search\Indexer"/>

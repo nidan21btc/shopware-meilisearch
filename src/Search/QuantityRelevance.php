@@ -5,6 +5,18 @@ namespace ShopwareMeilisearch\Search;
 /** Prefer an explicitly requested exact physical amount among equally matched results. */
 final class QuantityRelevance
 {
+    /** A combined quantity search uses unaltered product words when available. */
+    public static function preciseCombined(array $hits): array
+    {
+        $exact = [];
+        foreach ($hits as $hit) {
+            $typos = $hit['_rankingScoreDetails']['typo']['typoCount'] ?? null;
+            if (!is_int($typos)) return $hits;
+            if ($typos === 0) $exact[] = $hit;
+        }
+        return $exact !== [] ? $exact : $hits;
+    }
+
     /** Promote exact quantities only within the strongest engine relevance group. */
     public static function promoteCombined(array $hits, ?string $key, array $names, string $phrase): array
     {
@@ -18,10 +30,16 @@ final class QuantityRelevance
             if (($d['words']['matchingWords'] ?? null) !== $words || ($d['typo']['typoCount'] ?? null) !== $typos) $inStrongest = false;
             if (!$inStrongest) { $tail[] = $hit; continue; }
             $id = $hit['id'] ?? '';
-            if (($hit['quantityKey'] ?? null) === $key && isset($names[$id]) && self::wholeWords($phrase, $names[$id])) $exact[] = $hit;
+            if (($hit['quantityKey'] ?? null) === $key && isset($names[$id]) && self::matchesAny($phrase, $names[$id])) $exact[] = $hit;
             else $remaining[] = $hit;
         }
         return array_merge($exact, $remaining, $tail);
+    }
+
+    private static function matchesAny(string $phrase, string|array $values): bool
+    {
+        foreach ((array) $values as $value) if (is_string($value) && self::wholeWords($phrase, $value)) return true;
+        return false;
     }
 
     public static function wholeWords(string $phrase, string $name): bool

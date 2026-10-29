@@ -36,12 +36,12 @@ final class IdentifierFallback
     }
 
     /** @return array<string, string> Product ID to language-neutral article number. */
-    public function find(string $query, string $index, SalesChannelContext $context): array
+    public function find(string $query, string $index, SalesChannelContext $context, ?array $publishedFields = null): array
     {
         if (!self::isCode($query)) return [];
         // Read the published index settings: a pending config change must not
         // enable searching an identifier excluded from the current index.
-        $searchable = $this->engine->request('GET', '/indexes/' . $index . '/settings/searchable-attributes');
+        $searchable = $publishedFields ?? $this->engine->request('GET', '/indexes/' . $index . '/settings/searchable-attributes');
         $fields = array_values(array_intersect(['productNumber', 'ean', 'manufacturerNumber'], $searchable ?? []));
         if ($fields === []) return [];
         $criteria = (new Criteria())->setLimit(SearchService::MAX_CANDIDATES);
