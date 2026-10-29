@@ -13,7 +13,7 @@ const fixture = `<!doctype html><html><body><button class="search-toggle-btn">Se
 <div data-el-results class="el-search__body"></div><div hidden data-el-network-error><button data-el-retry>Retry</button></div></dialog>
 <script>window.PluginManager={initializePlugin:async(name,selector)=>{if(name!=='AddToCart'||selector!=='[data-el-results] [data-add-to-cart]')throw Error('Unexpected plugin');window.initialized=(window.initialized||0)+1;}}</script></body></html>`;
 const response = (q, params = new URLSearchParams(), english = false) => `<aside class="el-search__filters"><button data-el-suggestion="orchid">Orchid</button><div class="el-search__mobile-chips"><div class="el-search__chip-row"><button type="button" data-el-chip data-facet="category" data-value="${facetId}">Flowers</button></div></div><button type="button" class="el-search__filter-toggle" data-el-filter-toggle aria-expanded="false">Filters</button><form data-el-filters><details open data-el-facet="category"><summary>Category</summary><input data-el-facet-search><label data-el-facet-value><input type="checkbox" name="category[]" value="${facetId}" ${params.getAll('category[]').includes(facetId) ? 'checked' : ''}>Flowers</label>${[2,3,4,5,6,7].map(n => `<label data-el-facet-value ${n>5?'hidden':''}><input type="checkbox">Category ${n}</label>`).join('')}<button type="button" data-el-show-more data-more="More" data-less="Less">More</button></details><button type="button" data-el-reset>Reset</button></form></aside>
-<section data-el-result-status="Results for ${q}"><div class="el-search__toolbar"><span>87 Ergebnisse gefunden</span><button type="button" class="el-search__show-all" data-el-show-all aria-controls="el-search-product-grid" aria-expanded="false">Show all</button><label>Sortiert nach: <select data-el-sort><option value="relevance">Relevanz</option><option value="price-asc" ${params.get('sort') === 'price-asc' ? 'selected' : ''}>Price</option></select></label></div><button type="button" data-el-similar aria-pressed="${params.has('similar') ? String(params.get('similar') === '1') : String(english || q.trim().split(/\s+/).filter(Boolean).length >= 2)}">Similar</button><p class="test-query">${q}</p><div id="el-search-product-grid" class="el-search__grid">${Array.from({length:12}, (_,i) => `<article class="el-search__card">Product ${i}</article>`).join('')}</div><nav class="el-search__pagination"><button data-el-page="2">Next</button></nav><form data-add-to-cart><button>Add</button></form></section>`;
+<section data-el-result-status="Results for ${q}"><div class="el-search__toolbar"><span>87 Ergebnisse gefunden</span><button type="button" class="el-search__show-all" data-el-show-all aria-controls="el-search-product-grid" aria-expanded="false">Show all</button><label>Sortiert nach: <select data-el-sort><option value="relevance">Relevanz</option><option value="price-asc" ${params.get('sort') === 'price-asc' ? 'selected' : ''}>Price</option></select></label></div><button type="button" data-el-similar aria-pressed="${params.has('similar') ? String(params.get('similar') === '1') : String(english || q.trim().split(/\s+/).filter(Boolean).length >= 2)}">Similar</button><p class="test-query">${q}</p><div id="el-search-product-grid" class="el-search__grid">${Array.from({length:12}, (_,i) => `<article class="el-search__card">Page ${params.get('page') || '1'} Product ${i}</article>`).join('')}</div><nav class="el-search__pagination"><span>${params.get('page') || '1'} / 2</span><button data-el-page="2">Next</button></nav><form data-add-to-cart><button>Add</button></form></section>`;
 
 (async () => {
     const browser = await chromium.launch({headless: true, args: ['--no-sandbox']});
@@ -103,6 +103,32 @@ const response = (q, params = new URLSearchParams(), english = false) => `<aside
         await page.locator('[data-el-page]').click();
         await page.waitForTimeout(100);
         assert.equal(requests.at(-1).searchParams.get('page'), '2');
+        assert.equal(await page.locator('.el-search__pagination span').textContent(), '2 / 2');
+        assert.equal(await page.locator('.el-search__card').first().textContent(), 'Page 2 Product 0');
+        await query.press('Enter');
+        await page.waitForFunction(() => document.querySelector('[data-el-results]').getAttribute('aria-busy') === 'false');
+        assert.equal(requests.at(-1).searchParams.get('page'), '1');
+        assert.equal(await page.locator('.el-search__pagination span').textContent(), '1 / 2');
+        assert.equal(await page.locator('.el-search__card').first().textContent(), 'Page 1 Product 0');
+        assert.equal(requests.at(-1).searchParams.get('category[]'), facetId);
+        assert.equal(requests.at(-1).searchParams.get('sort'), 'price-asc');
+        await query.fill('different');
+        await query.press('Enter');
+        await page.waitForFunction(() => document.querySelector('[data-el-results]').getAttribute('aria-busy') === 'false');
+        assert.equal(requests.at(-1).searchParams.get('q'), 'different');
+        assert.equal(requests.at(-1).searchParams.has('category[]'), false, 'Quick Enter must reset the old category');
+        assert.equal(requests.at(-1).searchParams.has('sort'), false, 'Quick Enter must reset the old sort');
+        await page.locator('[name="category[]"]').check();
+        await page.waitForFunction(() => document.querySelector('[data-el-results]').getAttribute('aria-busy') === 'false');
+        await page.locator('[data-el-sort]').selectOption('price-asc');
+        await page.waitForFunction(() => document.querySelector('[data-el-results]').getAttribute('aria-busy') === 'false');
+        await query.fill('slow');
+        await page.waitForFunction(() => document.querySelector('[data-el-results]').getAttribute('aria-busy') === 'true');
+        await query.press('Enter');
+        await page.waitForFunction(() => document.querySelector('[data-el-results]').getAttribute('aria-busy') === 'false');
+        assert.equal(requests.at(-1).searchParams.get('q'), 'slow');
+        assert.equal(requests.at(-1).searchParams.has('category[]'), false, 'Enter during a pending search must reset old filters');
+        assert.equal(requests.at(-1).searchParams.has('sort'), false, 'Enter during a pending search must reset old sorting');
         await page.locator('[data-el-reset]').click();
         await page.waitForTimeout(100);
         assert.equal(requests.at(-1).searchParams.has('category[]'), false);
@@ -122,6 +148,12 @@ const response = (q, params = new URLSearchParams(), english = false) => `<aside
         assert.deepEqual(await query.evaluate(el => [el.selectionStart, el.selectionEnd]), [0, 6], 'Reopening must select the previous query');
         await page.keyboard.type('new');
         assert.equal(await query.inputValue(), 'new', 'Typing should replace the selected previous query');
+        await query.fill('latest');
+        await page.locator('[data-el-close]').last().click();
+        await page.locator('.search-toggle-btn').click();
+        await page.keyboard.press('End');
+        await page.keyboard.type(' 10');
+        assert.equal(await query.inputValue(), 'latest 10', 'Previous query should remain editable after selection');
         await query.fill('latest');
         await page.waitForFunction(() => document.querySelector('.test-query')?.textContent === 'latest');
         await page.keyboard.press('Escape');
@@ -182,6 +214,10 @@ const response = (q, params = new URLSearchParams(), english = false) => `<aside
         await page.waitForFunction(() => document.querySelector('[data-el-results]').getAttribute('aria-busy') === 'false');
         assert.equal(await page.locator('details[data-el-facet=category]').evaluate(el => el.open), true, 'Mobile facet collapsed after selection');
         assert.equal(await page.locator('[name="category[]"]').evaluate(el => document.activeElement === el), true, 'Mobile filter focus was lost');
+        assert.equal(requests.at(-1).searchParams.has('category[]'), false, 'Mobile filter removal must be sent');
+        await page.locator('[name="category[]"]').check();
+        await page.waitForFunction(() => document.querySelector('[data-el-results]').getAttribute('aria-busy') === 'false');
+        assert.equal(requests.at(-1).searchParams.get('category[]'), facetId, 'Mobile filter selection must be sent');
         await page.locator('[data-el-clear]').click();
         await page.waitForFunction(() => document.querySelector('.test-query')?.textContent === '');
         assert.equal(await query.inputValue(), '', 'Mobile clear did not clear the query');

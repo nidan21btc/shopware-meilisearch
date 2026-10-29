@@ -25,6 +25,8 @@ if (dialog && typeof dialog.showModal === 'function') {
     // customer changes the option, send their explicit choice instead.
     let includeSimilar = null;
     let lastAttempt = null;
+    // Only successful, currently displayed results define which controls belong to a query.
+    let displayedQuery = null;
     // Keep the latest query only in this tab's session, separately for each
     // language endpoint. Storage can be unavailable in restricted browsers.
     const queryStorageKey = `el-search:last-query:${dialog.dataset.locale || ''}:${dialog.dataset.endpoint}`;
@@ -149,6 +151,7 @@ if (dialog && typeof dialog.showModal === 'function') {
             else if (activeFacet && active?.matches('summary')) focusTarget = {type: 'summary', name: activeFacet};
             const oldScroll = results.scrollTop;
             results.innerHTML = html;
+            displayedQuery = response.ok ? (params.get('q') || '').trim() : null;
             // Count only a settled query, once per tab/session and language. Never
             // send intermediate keystrokes or a search whose results failed.
             clearTimeout(popularityTimer);
@@ -221,6 +224,7 @@ if (dialog && typeof dialog.showModal === 'function') {
             if (error.name === 'AbortError' || current !== revision) return;
             const retryFocus = results.contains(document.activeElement) || networkError.contains(document.activeElement);
             results.replaceChildren();
+            displayedQuery = null;
             networkError.hidden = false;
             if (retryFocus) networkError.querySelector('[data-el-retry]')?.focus({preventScroll: true});
             status.textContent = dialog.dataset.error;
@@ -237,7 +241,8 @@ if (dialog && typeof dialog.showModal === 'function') {
         dialog.showModal();
         query.focus();
         query.select();
-        load(1);
+        // Retain controls only while the same results are still displayed.
+        load(1, displayedQuery !== null && query.value.trim() !== displayedQuery);
     };
     const close = () => {
         stopVoice();
@@ -352,7 +357,7 @@ if (dialog && typeof dialog.showModal === 'function') {
     });
     dialog.querySelector('[data-el-query-form]').addEventListener('submit', (event) => {
         event.preventDefault();
-        load(1);
+        load(1, displayedQuery === null || query.value.trim() !== displayedQuery);
     });
     query.addEventListener('input', () => {
         clearTimeout(popularityTimer);
@@ -368,7 +373,7 @@ if (dialog && typeof dialog.showModal === 'function') {
         controller?.abort();
         ++revision;
         clearTimeout(timer);
-        timer = setTimeout(() => load(1, true), 300);
+        timer = setTimeout(() => load(1, displayedQuery === null || query.value.trim() !== displayedQuery), 300);
     });
     dialog.addEventListener('click', (event) => {
         if (event.target === dialog) {
