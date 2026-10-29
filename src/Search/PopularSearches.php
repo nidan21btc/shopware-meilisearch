@@ -3,6 +3,8 @@
 namespace ShopwareMeilisearch\Search;
 
 use Doctrine\DBAL\Connection;
+use Symfony\Contracts\Cache\CacheInterface;
+use Symfony\Contracts\Cache\ItemInterface;
 
 /** Local aggregates contain search text and pseudonymous session digests. */
 final class PopularSearches
@@ -13,7 +15,7 @@ final class PopularSearches
     private const MAX_SESSION_RECORDS = 30;
     private const PROOF_TTL = 300;
 
-    public function __construct(private readonly Connection $db, private readonly string $secret) {}
+    public function __construct(private readonly Connection $db, private readonly string $secret, private readonly CacheInterface $cache) {}
 
     public static function normalize(string $query): ?string
     {
@@ -38,16 +40,28 @@ final class PopularSearches
             if (!is_string($term) || !mb_check_encoding($term, 'UTF-8') || mb_strlen($term) > 60) throw new \InvalidArgumentException('Invalid blocklist.');
             $term = \Normalizer::normalize(trim($term), \Normalizer::FORM_C);
             if ($term === false) throw new \InvalidArgumentException('Invalid blocklist.');
-            if ($term !== '') $blocked[] = mb_convert_case($term, MB_CASE_FOLD, 'UTF-8');
+            if ($term !== '') {
+                $term = self::blockKey($term);
+                if ($term !== '') $blocked[] = $term;
+            }
         }
         return $blocked;
     }
 
     public static function blocked(string $query, array $blocked): bool
     {
-        $query = mb_convert_case($query, MB_CASE_FOLD, 'UTF-8');
-        foreach ($blocked as $term) if (str_contains($query, $term)) return true;
+        $query = self::blockKey($query);
+        foreach ($blocked as $term) if ($term !== '' && str_contains($query, $term)) return true;
         return false;
+    }
+
+    private static function blockKey(string $value): string
+    {
+        $value = \Normalizer::normalize($value, \Normalizer::FORM_C);
+        if ($value === false) return '';
+        $value = mb_convert_case($value, MB_CASE_FOLD, 'UTF-8');
+        $value = strtr($value, ['ä' => 'ae', 'ö' => 'oe', 'ü' => 'ue']);
+        return preg_replace('/[\s\p{Pd}]+/u', '', $value) ?? '';
     }
 
     /** A short-lived proof binds a successful search to its session and sales-channel context. */
@@ -80,7 +94,11 @@ final class PopularSearches
     public function suggestions(string $salesChannelId, string $languageId, array $blocked): array
     {
         if (!preg_match('/^[a-f0-9]{32}$/D', $salesChannelId) || !preg_match('/^[a-f0-9]{32}$/D', $languageId)) return [];
-        $values = $this->db->fetchFirstColumn('SELECT query FROM shopware_meilisearch_popular_session WHERE sales_channel_id=? AND language_id=? AND day>=UTC_DATE()-INTERVAL 29 DAY GROUP BY query_hash,query HAVING COUNT(DISTINCT session_hash)>=' . self::MIN_SESSIONS . ' ORDER BY COUNT(DISTINCT session_hash) DESC,query ASC LIMIT 110', [hex2bin($salesChannelId),hex2bin($languageId)]);
+        $key = 'shopware_meilisearch_popular_' . hash('sha256', $salesChannelId . ':' . $languageId);
+        $values = $this->cache->get($key, function (ItemInterface $item) use ($salesChannelId, $languageId): array {
+            $item->expiresAfter(300);
+            return $this->db->fetchFirstColumn('SELECT query FROM shopware_meilisearch_popular_session WHERE sales_channel_id=? AND language_id=? AND day>=UTC_DATE()-INTERVAL 29 DAY GROUP BY query_hash,query HAVING COUNT(DISTINCT session_hash)>=' . self::MIN_SESSIONS . ' ORDER BY COUNT(DISTINCT session_hash) DESC,query ASC LIMIT 110', [hex2bin($salesChannelId),hex2bin($languageId)]);
+        });
         return array_slice(array_values(array_filter($values, static fn (string $query): bool => !self::blocked($query, $blocked))), 0, 10);
     }
 

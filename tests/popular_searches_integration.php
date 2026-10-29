@@ -10,7 +10,7 @@ $db = Doctrine\DBAL\DriverManager::getConnection($parser->parse($_SERVER['DATABA
 require __DIR__ . '/../src/Search/PopularSearches.php';
 use ShopwareMeilisearch\Search\PopularSearches;
 $secret = bin2hex(random_bytes(32));
-$service = new PopularSearches($db, $secret);
+$service = new PopularSearches($db, $secret, new Symfony\Component\Cache\Adapter\NullAdapter());
 $channel = bin2hex(random_bytes(16)); $other = bin2hex(random_bytes(16)); $language = bin2hex(random_bytes(16));
 $assert = static function (bool $ok, string $message): void { if (!$ok) throw new RuntimeException($message); };
 $db->beginTransaction();
@@ -29,7 +29,14 @@ try {
     $assert($service->suggestions($channel, $language, []) === [], 'Repeated requests and unverifiable historical counts must not reach the threshold.');
     $service->record($channel, $language, 'Rose', 'session-8', []);
     $assert($service->suggestions($channel, $language, []) === ['rose'], 'Ten independent sessions should reach the threshold.');
+    $cache = new Symfony\Component\Cache\Adapter\ArrayAdapter();
+    $cached = new PopularSearches($db, $secret, $cache);
+    $assert($cached->suggestions($channel, $language, []) === ['rose'], 'Cached suggestions missing.');
+    $assert($cached->suggestions($channel, $language, ['rose']) === [], 'Blocklist changes must apply immediately to cached suggestions.');
+    $assert($cached->suggestions($other, $language, []) === [] && $cached->suggestions($channel, $other, []) === [], 'Cached suggestions must be isolated by channel and language.');
+
     $assert($service->suggestions($other, $language, []) === [] && $service->suggestions($channel, $other, []) === [], 'Sales channels and languages must be isolated.');
+    foreach (['gruene bluete', 'GRÜNE-BLÜTE', 'Grüne Blüte'] as $variant) $assert(PopularSearches::blocked($variant, PopularSearches::blocklist('{"de-DE":["grüne blüte"]}', 'de-DE')), 'Blocklist normalization failed.');
     $blocked = PopularSearches::blocklist('{"de-DE":["ROS"]}', 'de-DE');
     $assert($service->suggestions($channel, $language, $blocked) === [], 'Blocklist must hide existing aggregates case-insensitively.');
     $before = (int) $db->fetchOne('SELECT COUNT(*) FROM shopware_meilisearch_popular_session WHERE sales_channel_id=?', [hex2bin($channel)]);

@@ -27,6 +27,14 @@ try {
  verify($guard->enter($spoofed)?->getStatusCode()===429,'Untrusted forwarded IP must not bypass client limits');
  $other=$r('192.0.2.77');verify($guard->enter($other)===null,'One client must not consume another client bucket');$guard->release($other);
  file_put_contents($root.'/admission.json','{}');
+ $defaults = new SearchRequestGuard($root); $defaultActive = [];
+ for ($i=0; $i<10; $i++) { $q=$r('192.0.2.40'); verify($defaults->enter($q)===null,'Default must allow ten concurrent requests'); $defaultActive[]=$q; }
+ verify($defaults->enter($r('192.0.2.41'))?->getStatusCode()===429,'Default must reject an eleventh concurrent request');
+ foreach ($defaultActive as $q) $defaults->release($q);
+ file_put_contents($root.'/admission.json','{}');
+ for ($i=0; $i<15; $i++) { $q=$r('192.0.2.42'); verify($defaults->enter($q)===null,'Default per-IP burst must allow fifteen requests'); $defaults->release($q); }
+ verify($defaults->enter($r('192.0.2.42'))?->getStatusCode()===429,'Default per-IP burst must reject the sixteenth request');
+ file_put_contents($root.'/admission.json','{}');
  $shared = new SearchRequestGuard($root, 10, 10, 10); $active = [];
  for($i=0;$i<10;$i++){ $q=$r('192.0.2.50');verify($shared->enter($q)===null,'Ten searches behind one shared IP must fit configured capacity');$active[]=$q; }
  verify($shared->enter($r('192.0.2.51'))?->getStatusCode()===429,'Configured capacity must reject an eleventh active request');

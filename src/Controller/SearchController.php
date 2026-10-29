@@ -46,7 +46,9 @@ class SearchController extends StorefrontController
             $proof = null;
             try {
                 $blocked = PopularSearches::blocklist($this->config->getString('ShopwareMeilisearch.config.blockedPopularQueries', $context->getSalesChannelId()), $context->getLanguageInfo()->localeCode);
-                $automatic = $this->popularSearches->suggestions($context->getSalesChannelId(), $context->getLanguageId(), $blocked);
+                $automatic = ($input->query === '' || $result['total'] === 0)
+                    ? $this->popularSearches->suggestions($context->getSalesChannelId(), $context->getLanguageId(), $blocked)
+                    : [];
                 if ($automatic !== []) $popular = $automatic;
                 $normalized = PopularSearches::normalize($input->query);
                 if ($normalized !== null && !PopularSearches::blocked($normalized, $blocked) && $result['total'] > 0 && $input->page === 1 && $input->manufacturers === [] && $input->categories === [] && $request->hasSession()) {
