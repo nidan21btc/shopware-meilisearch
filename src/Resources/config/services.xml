@@ -33,12 +33,21 @@
         </service>
         <service id="ShopwareMeilisearch\Search\PublishedSearchFields"><argument type="service" id="shopware_meilisearch.read_engine"/><argument type="service" id="cache.app"/></service>
         <service id="ShopwareMeilisearch\Search\SearchRequest"><argument type="service" id="shopware_meilisearch.read_engine"/><argument type="service" id="ShopwareMeilisearch\Search\PublishedSearchFields"/><argument type="service" id="logger"/></service>
-        <service id="ShopwareMeilisearch\Search\SearchService">
-            <argument type="service" id="shopware_meilisearch.read_engine"/>
+        <service id="ShopwareMeilisearch\Search\SearchCriteria">
+            <argument type="service" id="Shopware\Core\Content\Product\SalesChannel\ProductCloseoutFilterFactory"/>
+            <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
+        </service>
+        <service id="ShopwareMeilisearch\Search\FacetCalculator">
             <argument type="service" id="sales_channel.product.repository"/>
             <argument type="service" id="product_manufacturer.repository"/>
             <argument type="service" id="category.repository"/>
-            <argument type="service" id="Shopware\Core\Content\Product\SalesChannel\ProductCloseoutFilterFactory"/>
+            <argument type="service" id="ShopwareMeilisearch\Search\SearchCriteria"/>
+        </service>
+        <service id="ShopwareMeilisearch\Search\SearchService">
+            <argument type="service" id="shopware_meilisearch.read_engine"/>
+            <argument type="service" id="sales_channel.product.repository"/>
+            <argument type="service" id="ShopwareMeilisearch\Search\SearchCriteria"/>
+            <argument type="service" id="ShopwareMeilisearch\Search\FacetCalculator"/>
             <argument type="service" id="ShopwareMeilisearch\Search\ParentTranslations"/>
             <argument type="service" id="ShopwareMeilisearch\Search\CurrentLanguageNames"/>
             <argument type="service" id="ShopwareMeilisearch\Search\IdentifierFallback"/>
