@@ -415,6 +415,37 @@ $expandedFacets = [['id' => 'a', 'name' => 'A', 'count' => 30], ['id' => 'b', 'n
 check(SearchService::precisionFacetCounts($preciseFacets, $expandedFacets, 20) === [
     ['id' => 'a', 'name' => 'A', 'count' => 25], ['id' => 'b', 'name' => 'B', 'count' => 7], ['id' => 'c', 'name' => 'C', 'count' => 2],
 ], 'Facet counts follow per-choice precise/expanded thresholds');
+// Synthetic facet fixtures exercise boundaries, missing choices and stable ordering.
+// They contain no merchant products and characterize the behavior before refactoring.
+$facetScenarios = [
+    'threshold boundary' => [
+        [['id'=>'a','name'=>'Amber','count'=>2], ['id'=>'b','name'=>'Blue','count'=>1]],
+        [['id'=>'a','name'=>'Amber','count'=>5], ['id'=>'b','name'=>'Blue','count'=>4]], 2,
+        [['id'=>'b','name'=>'Blue','count'=>4], ['id'=>'a','name'=>'Amber','count'=>2]],
+    ],
+    'selected facet with no hits' => [
+        [['id'=>'a','name'=>'Amber','count'=>0]], [['id'=>'a','name'=>'Amber','count'=>0]], 2,
+        [['id'=>'a','name'=>'Amber','count'=>0]],
+    ],
+    'precise-only and expanded-only choices' => [
+        [['id'=>'a','name'=>'Amber','count'=>1]], [['id'=>'b','name'=>'Blue','count'=>3]], 2,
+        [['id'=>'b','name'=>'Blue','count'=>3], ['id'=>'a','name'=>'Amber','count'=>1]],
+    ],
+    'ties sorted by display name' => [
+        [['id'=>'a','name'=>'Amber','count'=>2], ['id'=>'b','name'=>'Blue','count'=>2]],
+        [['id'=>'b','name'=>'Blue','count'=>4], ['id'=>'a','name'=>'Amber','count'=>4]], 2,
+        [['id'=>'a','name'=>'Amber','count'=>2], ['id'=>'b','name'=>'Blue','count'=>2]],
+    ],
+    'empty facet sets' => [[], [], 2, []],
+];
+foreach ($facetScenarios as $description => [$precise, $expanded, $threshold, $expected]) {
+    check(SearchService::precisionFacetCounts($precise, $expanded, $threshold) === $expected, 'Synthetic facet comparison: ' . $description);
+}
+$familyCandidates = ['parent', 'small', 'large', 'independent'];
+$familyMap = ['small'=>'parent', 'large'=>'parent'];
+$familyPrimary = ['parent'=>true, 'small'=>true, 'large'=>true, 'independent'=>true];
+check(SearchService::withoutMatchedParents($familyCandidates, SearchService::matchedParents($familyMap, $familyPrimary, array_fill_keys(['parent','small','large','independent'], true))) === ['small','large','independent'], 'Synthetic catalog removes a matching parent while preserving both sizes and order');
+check(SearchService::matchedParents($familyMap, $familyPrimary, ['parent'=>true, 'independent'=>true]) === [], 'Synthetic catalog keeps the parent when category or brand filters exclude the children');
 check(SearchService::withoutMatchedParents(['parent'], []) === ['parent'], 'Keep a parent when no variant matched');
 check(SearchService::matchedParents(['child' => 'parent'], ['parent' => true, 'child' => true], ['parent' => true]) === [], 'A variant excluded by active filters must not hide its parent');
 check(SearchService::matchedParents(['child' => 'parent'], ['parent' => true, 'child' => true], ['child' => true]) === ['parent'], 'An eligible matching variant still hides its parent');
