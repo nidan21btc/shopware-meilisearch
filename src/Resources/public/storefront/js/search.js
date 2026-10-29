@@ -5,6 +5,10 @@ if (dialog && typeof dialog.showModal === 'function') {
     const status = dialog.querySelector('[data-el-status]');
     const networkError = dialog.querySelector('[data-el-network-error]');
     const clearQuery = dialog.querySelector('[data-el-clear]');
+    const shareButton = dialog.querySelector('[data-el-share]');
+    const shareFallback = dialog.querySelector('[data-el-share-fallback]');
+    const shareLink = dialog.querySelector('[data-el-share-link]');
+    const shareStatus = dialog.querySelector('[data-el-share-status]');
     const voice = dialog.querySelector('[data-el-voice]');
     const voiceNotice = dialog.querySelector('[data-el-voice-notice]');
     // Only the unprefixed API with an explicit local-only control is eligible.
@@ -31,6 +35,7 @@ if (dialog && typeof dialog.showModal === 'function') {
     // language endpoint. Storage can be unavailable in restricted browsers.
     const queryStorageKey = `el-search:last-query:${dialog.dataset.locale || ''}:${dialog.dataset.endpoint}`;
     const rememberQuery = () => {
+        if (shareButton) shareButton.disabled = query.value.trim() === '';
         try {
             if (query.value === '') sessionStorage.removeItem(queryStorageKey);
             else sessionStorage.setItem(queryStorageKey, Array.from(query.value).slice(0, 150).join(''));
@@ -41,6 +46,7 @@ if (dialog && typeof dialog.showModal === 'function') {
         if (previousQuery) query.value = Array.from(previousQuery).slice(0, 150).join('');
     } catch (_) { /* Search remains usable without browser storage. */ }
     if (clearQuery) clearQuery.hidden = query.value === '';
+    if (shareButton) shareButton.disabled = query.value.trim() === '';
     const mobile = window.matchMedia('(max-width:600px)');
     let mobileExpanded = false;
     const syncMobileView = () => dialog.classList.toggle('el-search--mobile-preview', mobile.matches && !mobileExpanded && query.value.trim() !== '');
@@ -81,14 +87,16 @@ if (dialog && typeof dialog.showModal === 'function') {
         }
     });
 
-    const load = async (page = 1, reset = false, retry = false) => {
+    const load = async (page = 1, reset = false, retry = false, shared = null) => {
+        if (shareFallback) shareFallback.hidden = true;
+        if (shareStatus) shareStatus.textContent = '';
         clearTimeout(timer);
         controller?.abort();
         controller = new AbortController();
         const current = ++revision;
         const canRetry = retry && lastAttempt !== null;
-        const params = canRetry ? new URLSearchParams(lastAttempt) : new URLSearchParams({q: query.value.trim(), page: String(page)});
-        if (!canRetry) {
+        const params = shared ? new URLSearchParams(shared) : canRetry ? new URLSearchParams(lastAttempt) : new URLSearchParams({q: query.value.trim(), page: String(page)});
+        if (!canRetry && !shared) {
             if (includeSimilar !== null) params.set('similar', includeSimilar ? '1' : '0');
             const filters = results.querySelector('[data-el-filters]');
             if (!reset && filters) {
@@ -233,7 +241,7 @@ if (dialog && typeof dialog.showModal === 'function') {
         }
     };
 
-    const open = (source) => {
+    const open = (source, shared = null) => {
         if (dialog.open) return;
         opener = source;
         oldOverflow = document.documentElement.style.overflow;
@@ -242,7 +250,7 @@ if (dialog && typeof dialog.showModal === 'function') {
         query.focus();
         query.select();
         // Retain controls only while the same results are still displayed.
-        load(1, displayedQuery !== null && query.value.trim() !== displayedQuery);
+        load(1, displayedQuery !== null && query.value.trim() !== displayedQuery, false, shared);
     };
     const close = () => {
         stopVoice();
@@ -283,6 +291,48 @@ if (dialog && typeof dialog.showModal === 'function') {
         if (!restoringFocus && event.target.matches('.header-search-input') && !dialog.open) open(event.target);
     });
     dialog.querySelectorAll('[data-el-close]').forEach(button => button.addEventListener('click', close));
+    shareButton?.addEventListener('click', async () => {
+        const term = query.value.trim();
+        const params = displayedQuery === term && lastAttempt ? new URLSearchParams(lastAttempt) : new URLSearchParams({q: term});
+        params.delete('page');
+        const link = new URL(window.location.origin);
+        link.pathname = window.location.pathname;
+        link.hash = 'el-search=' + encodeURIComponent(params.toString());
+        if (shareStatus) shareStatus.textContent = '';
+        try {
+            if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
+            await navigator.clipboard.writeText(link.href);
+            if (shareFallback) shareFallback.hidden = true;
+            if (shareStatus) shareStatus.textContent = shareStatus.dataset.copied || '';
+        } catch (_) {
+            if (shareFallback && shareLink) { shareFallback.hidden = false; shareLink.value = link.href; shareLink.focus(); shareLink.select(); }
+        }
+    });
+    const sharedHash = window.location.hash.match(/^#el-search=(.{1,4096})$/);
+    if (sharedHash) {
+        try {
+            const incoming = new URLSearchParams(decodeURIComponent(sharedHash[1]));
+            const shared = new URLSearchParams();
+            const term = (incoming.get('q') || '').trim();
+            if (term && Array.from(term).length <= 150) {
+                shared.set('q', term);
+                for (const name of ['category[]', 'manufacturer[]']) {
+                    for (const value of incoming.getAll(name).slice(0, 20)) if (/^[0-9a-f]{32}$/.test(value)) shared.append(name, value);
+                }
+                const sort = incoming.get('sort');
+                if (['relevance', 'price-asc', 'price-desc', 'name-asc'].includes(sort)) shared.set('sort', sort);
+                if (['0', '1'].includes(incoming.get('similar'))) {
+                    includeSimilar = incoming.get('similar') === '1';
+                    shared.set('similar', incoming.get('similar'));
+                }
+                shared.set('page', '1');
+                query.value = term;
+                if (clearQuery) clearQuery.hidden = false;
+                rememberQuery();
+                open(null, shared);
+            }
+        } catch (_) { /* Ignore malformed links and leave the shop usable. */ }
+    }
     voice?.addEventListener('click', () => {
         if (!voiceSupported) return;
         if (recognition) {
@@ -360,6 +410,8 @@ if (dialog && typeof dialog.showModal === 'function') {
         load(1, displayedQuery === null || query.value.trim() !== displayedQuery);
     });
     query.addEventListener('input', () => {
+        if (shareFallback) shareFallback.hidden = true;
+        if (shareStatus) shareStatus.textContent = '';
         clearTimeout(popularityTimer);
         rememberQuery();
         stopVoice();

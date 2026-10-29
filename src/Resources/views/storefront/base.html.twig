@@ -19,6 +19,11 @@
                 </form>
                 <button type="button" data-el-close class="el-search__close" aria-label="{{ 'elSearch.close'|trans }}">{% sw_icon 'x' %}</button>
             </header>
+            <div class="el-search__sharing">
+                <button type="button" data-el-share class="el-search__share">{{ 'elSearch.shareSearch'|trans }}</button>
+                <label data-el-share-fallback hidden>{{ 'elSearch.shareCopy'|trans }} <input data-el-share-link readonly></label>
+                <span data-el-share-status role="status" aria-live="polite" data-copied="{{ 'elSearch.shareCopied'|trans }}"></span>
+            </div>
             <p data-el-status class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></p>
             <p data-el-voice-notice class="el-search__voice-notice" role="status" hidden></p>
             <div data-el-results class="el-search__body"></div>

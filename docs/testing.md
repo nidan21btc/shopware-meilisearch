@@ -68,6 +68,10 @@ logging failure isolation. It uses synthetic data and temporary files only.
 
 ## Credentialed-page browser regression
 
+Run `node tests/share_overlay_browser.cjs` with Playwright and its Chromium and
+Firefox browsers installed to check shared links, filter/sort restoration,
+desktop/mobile clearing and selection after a reload.
+
 ```sh
 node tests/credentialed_page_url_browser.cjs
 ```
