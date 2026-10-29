@@ -38,13 +38,13 @@ final class SearchService
 
     public function search(SearchInput $input, SalesChannelContext $context): array
     {
-        $result = $this->searchOnce($input, $context);
+        $alternate = OrthographicFallback::german($input->query, $context->getLanguageInfo()->localeCode);
+        $result = $this->searchOnce($input, $context, $alternate);
         if ($result['total'] > 0) return $result;
 
         // A stale, unavailable or filtered index hit is not a visible result.
         // Only try the same-language spelling alternative after all Shopware
         // visibility and customer filters have been applied.
-        $alternate = OrthographicFallback::german($input->query, $context->getLanguageInfo()->localeCode);
         if ($alternate === null) return $result;
         try {
             $corrected = new SearchInput($alternate, $input->page, $input->sort, $input->manufacturers,
@@ -60,7 +60,7 @@ final class SearchService
         return $result;
     }
 
-    private function searchOnce(SearchInput $input, SalesChannelContext $context): array
+    private function searchOnce(SearchInput $input, SalesChannelContext $context, ?string $orthographic = null): array
     {
         $index = Engine::indexName($context->getSalesChannelId(), $context->getLanguageId());
         // Retrieve IDs and the missing-name marker only. Context-dependent
@@ -82,6 +82,43 @@ final class SearchService
         if ($needsTypoDetails) {
             $hits = TypoRelevance::reorder($hits);
             $hits = QuantityRelevance::reorder($hits, $quantityKey);
+        }
+        if ($orthographic !== null) {
+            try {
+                $alternative = $this->engine->request('POST', '/indexes/' . $index . '/search', [
+                    'q' => $orthographic, 'page' => 1, 'hitsPerPage' => self::MAX_CANDIDATES,
+                    'attributesToRetrieve' => ['id', 'unnamed', 'quantityKey'],
+                    'showRankingScoreDetails' => true, 'matchingStrategy' => 'frequency',
+                ]);
+                $seen = array_fill_keys(array_column($hits, 'id'), true);
+                foreach (TypoRelevance::reorder($alternative['hits'] ?? []) as $hit) {
+                    if (isset($hit['id']) && is_string($hit['id']) && !isset($seen[$hit['id']])) {
+                        $seen[$hit['id']] = true;
+                        $hits[] = $hit;
+                    }
+                }
+            } catch (\Throwable $error) {
+                $this->logger->warning('Local spelling expansion was skipped', ['exceptionClass' => $error::class]);
+            }
+        }
+        $phrase = PartialMatches::withoutTrailingQuantity($input->query);
+        if ($phrase !== null && $quantityKey !== null) {
+            try {
+                $phraseResult = $this->engine->request('POST', '/indexes/' . $index . '/search', [
+                    'q' => $phrase, 'limit' => self::MAX_CANDIDATES, 'attributesToRetrieve' => ['id'], 'matchingStrategy' => 'all',
+                ]);
+                $phraseIds = array_column($phraseResult['hits'] ?? [], 'id');
+                $alternatePhrase = $orthographic !== null ? PartialMatches::withoutTrailingQuantity($orthographic) : null;
+                if ($alternatePhrase !== null) {
+                    $alternatePhraseResult = $this->engine->request('POST', '/indexes/' . $index . '/search', [
+                        'q' => $alternatePhrase, 'limit' => self::MAX_CANDIDATES, 'attributesToRetrieve' => ['id'], 'matchingStrategy' => 'all',
+                    ]);
+                    $phraseIds = array_values(array_unique(array_merge($phraseIds, array_column($alternatePhraseResult['hits'] ?? [], 'id'))));
+                }
+                $hits = QuantityRelevance::promoteCombined($hits, $quantityKey, $phraseIds);
+            } catch (\Throwable $error) {
+                $this->logger->warning('Local combined quantity ranking was skipped', ['exceptionClass' => $error::class]);
+            }
         }
         // Preserve a precise view for short words while allowing similar hits.
         $minimumPrecise = $context->getLanguageInfo()->localeCode === 'en-GB' && PartialMatches::terms($input->query) === [] ? 1 : SearchInput::PAGE_SIZE;

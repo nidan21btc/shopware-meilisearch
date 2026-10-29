@@ -74,6 +74,9 @@ check(PartialMatches::hideParent($one, $two, [$one => true, $two => true]) && Pa
 check(OrthographicFallback::german('Blueten', 'de-DE') === 'blüten', 'German spelling fallback restores an umlaut');
 check(OrthographicFallback::german('Fuss', 'de-AT') === 'fuß', 'German spelling fallback restores sharp s');
 check(OrthographicFallback::german('Blueten', 'en-GB') === null, 'German spelling fallback does not cross languages');
+check(OrthographicFallback::german('Bachblueten 20 ml', 'de-DE') === 'bachblüten 20 ml', 'German spelling expansion preserves a trailing quantity');
+check(OrthographicFallback::german('Bachblueten   Spray 20 ml', 'de-DE') === 'bachblüten spray 20 ml', 'Whitespace normalization does not corrupt a quantity suffix');
+check(OrthographicFallback::german('AB123-ue 20 ml', 'de-DE') === null, 'German spelling expansion never rewrites article codes');
 check(OrthographicFallback::german('AB123-ue', 'de-DE') === null && OrthographicFallback::german('ue', 'de-DE') === null, 'Article numbers and very short queries are not rewritten');
 $shortHits = [];
 for ($n = 0; $n < 20; ++$n) {
@@ -315,6 +318,9 @@ $quantityHits = [
 ];
 check(array_column(QuantityRelevance::reorder($quantityHits, 'ml:1'), 'id') === ['whole', 'fraction', 'weaker'], 'Prefer the exact quantity only within equally matched word and typo groups');
 check(QuantityRelevance::reorder($quantityHits, null) === $quantityHits, 'Ambiguous quantities retain the original order');
+$combinedHits = [['id'=>'irrelevant','quantityKey'=>'ml:1'], ['id'=>'different','quantityKey'=>'ml:30'], ['id'=>'matching','quantityKey'=>'ml:1'], ['id'=>'missing']];
+check(array_column(QuantityRelevance::promoteCombined($combinedHits, 'ml:1', ['different','matching']), 'id') === ['matching','irrelevant','different','missing'], 'Promote only exact quantities with a matching complete product phrase');
+check(QuantityRelevance::promoteCombined($combinedHits, null, ['matching']) === $combinedHits && QuantityRelevance::promoteCombined($combinedHits, 'ml:1', []) === $combinedHits, 'Ambiguous quantities and absent phrase matches do not reorder');
 check(QuantityRelevance::reorder([['id'=>'unknown']], 'ml:1') === [['id'=>'unknown']], 'Missing ranking metadata retains the original order');
 
 check(QuantityUnits::tokens(str_repeat('f', 32), 0.01, $quantityUnits) === [], 'Do not guess unknown units');

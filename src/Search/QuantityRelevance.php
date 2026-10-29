@@ -5,6 +5,19 @@ namespace ShopwareMeilisearch\Search;
 /** Prefer an explicitly requested exact physical amount among equally matched results. */
 final class QuantityRelevance
 {
+    /** Promote exact quantities only when the product also matches the full text phrase. */
+    public static function promoteCombined(array $hits, ?string $key, array $phraseIds): array
+    {
+        if ($key === null || $phraseIds === []) return $hits;
+        $allowed = array_fill_keys($phraseIds, true);
+        $exact = []; $remaining = [];
+        foreach ($hits as $hit) {
+            if (isset($hit['id'], $allowed[$hit['id']]) && ($hit['quantityKey'] ?? null) === $key) $exact[] = $hit;
+            else $remaining[] = $hit;
+        }
+        return array_merge($exact, $remaining);
+    }
+
     public static function reorder(array $hits, ?string $key): array
     {
         if ($key === null || $hits === []) return $hits;
