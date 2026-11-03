@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.2
+
+- Size the initial search overlay to its content instead of a fixed height, so
+  featured product cards and price information fit when space permits. Limit the
+  overlay to the viewport height and preserve scrolling on shorter screens.
+
 ## 0.4.1
 
 - Keep precise short-query results and facet counts consistent when applying filters.
