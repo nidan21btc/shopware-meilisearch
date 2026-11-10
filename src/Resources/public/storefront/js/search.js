@@ -15,6 +15,10 @@ if (dialog && typeof dialog.showModal === 'function') {
     // Never use a prefixed/cloud fallback or install a language pack.
     const Speech = window.SpeechRecognition;
     const voiceSupported = Boolean(window.isSecureContext && typeof Speech === 'function' && Speech.prototype && 'processLocally' in Speech.prototype);
+    const configuredMinimum = Number(dialog.dataset.minimumQueryLength ?? 2);
+    const minimumQueryLength = Number.isInteger(configuredMinimum) && configuredMinimum >= 1 && configuredMinimum <= 150 ? configuredMinimum : 2;
+    const normalizedQuery = value => value.trim().normalize('NFC');
+    const tooShort = value => { const term = normalizedQuery(value); return term !== '' && Array.from(term).length < minimumQueryLength; };
     let recognition = null;
     let voiceTimer = null;
     let controller;
@@ -35,7 +39,7 @@ if (dialog && typeof dialog.showModal === 'function') {
     // language endpoint. Storage can be unavailable in restricted browsers.
     const queryStorageKey = `el-search:last-query:${dialog.dataset.locale || ''}:${dialog.dataset.endpoint}`;
     const rememberQuery = () => {
-        if (shareButton) shareButton.disabled = query.value.trim() === '';
+        if (shareButton) shareButton.disabled = query.value.trim() === '' || tooShort(query.value);
         try {
             if (query.value === '') sessionStorage.removeItem(queryStorageKey);
             else sessionStorage.setItem(queryStorageKey, Array.from(query.value).slice(0, 150).join(''));
@@ -46,7 +50,7 @@ if (dialog && typeof dialog.showModal === 'function') {
         if (previousQuery) query.value = Array.from(previousQuery).slice(0, 150).join('');
     } catch (_) { /* Search remains usable without browser storage. */ }
     if (clearQuery) clearQuery.hidden = query.value === '';
-    if (shareButton) shareButton.disabled = query.value.trim() === '';
+    if (shareButton) shareButton.disabled = query.value.trim() === '' || tooShort(query.value);
     const mobile = window.matchMedia('(max-width:600px)');
     let mobileExpanded = false;
     const syncMobileView = () => dialog.classList.toggle('el-search--mobile-preview', mobile.matches && !mobileExpanded && query.value.trim() !== '');
@@ -87,10 +91,26 @@ if (dialog && typeof dialog.showModal === 'function') {
         }
     });
 
+    const showMinimumHint = value => {
+        if (!tooShort(value)) return false;
+        lastAttempt = null;
+        displayedQuery = null;
+        const message = document.createElement('p');
+        message.className = 'el-search__empty';
+        message.textContent = dialog.dataset.minimumQueryHint || '';
+        results.replaceChildren(message);
+        results.setAttribute('aria-busy', 'false');
+        networkError.hidden = true;
+        status.textContent = message.textContent;
+        dialog.classList.remove('el-search--discovery', 'el-search--filters-open');
+        return true;
+    };
+
     const load = async (page = 1, reset = false, retry = false, shared = null) => {
         if (shareFallback) shareFallback.hidden = true;
         if (shareStatus) shareStatus.textContent = '';
         clearTimeout(timer);
+        clearTimeout(popularityTimer);
         controller?.abort();
         controller = new AbortController();
         const current = ++revision;
@@ -106,6 +126,7 @@ if (dialog && typeof dialog.showModal === 'function') {
             }
             if (!reset) params.set('sort', results.querySelector('[data-el-sort]')?.value || 'relevance');
         }
+        if (showMinimumHint(params.get('q') || '')) return;
         lastAttempt = params.toString();
         dialog.classList.toggle('el-search--discovery', (params.get('q') || '') === '');
         syncMobileView();
@@ -253,6 +274,7 @@ if (dialog && typeof dialog.showModal === 'function') {
         load(1, displayedQuery !== null && query.value.trim() !== displayedQuery, false, shared);
     };
     const close = () => {
+        clearTimeout(timer);
         stopVoice();
         restoringFocus = true;
         dialog.close();
@@ -293,6 +315,7 @@ if (dialog && typeof dialog.showModal === 'function') {
     dialog.querySelectorAll('[data-el-close]').forEach(button => button.addEventListener('click', close));
     shareButton?.addEventListener('click', async () => {
         const term = query.value.trim();
+        if (!term || tooShort(term)) return;
         const params = displayedQuery === term && lastAttempt ? new URLSearchParams(lastAttempt) : new URLSearchParams({q: term});
         params.delete('page');
         const link = new URL(window.location.origin);
@@ -425,7 +448,8 @@ if (dialog && typeof dialog.showModal === 'function') {
         controller?.abort();
         ++revision;
         clearTimeout(timer);
-        timer = setTimeout(() => load(1, displayedQuery === null || query.value.trim() !== displayedQuery), 300);
+        const delay = tooShort(query.value) ? 800 : 300;
+        timer = setTimeout(() => load(1, displayedQuery === null || query.value.trim() !== displayedQuery), delay);
     });
     dialog.addEventListener('click', (event) => {
         if (event.target === dialog) {

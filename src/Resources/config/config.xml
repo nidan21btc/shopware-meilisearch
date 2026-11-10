@@ -11,6 +11,16 @@
             <helpText>Erst nach dem Indexaufbau aktivieren und eine vorhandene Suche deaktivieren.</helpText>
             <defaultValue>false</defaultValue>
         </input-field>
+        <input-field type="int">
+            <name>minimumQueryLength</name>
+            <label>Minimum search length</label>
+            <label lang="de-DE">Mindestlänge für Suchanfragen</label>
+            <helpText>1–150 characters. Empty queries still show recommendations. No reindexing required.</helpText>
+            <helpText lang="de-DE">1–150 Zeichen. Bei leerer Eingabe werden weiterhin Empfehlungen angezeigt. Kein Neuaufbau des Index erforderlich.</helpText>
+            <defaultValue>2</defaultValue>
+            <min>1</min>
+            <max>150</max>
+        </input-field>
         <component name="sw-meilisearch-index-fields">
             <name>indexFields</name>
             <label>Durchsuchbare Indexfelder</label>

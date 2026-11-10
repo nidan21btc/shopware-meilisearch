@@ -8,6 +8,18 @@ use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 final readonly class SearchInput
 {
     public const PAGE_SIZE = 20;
+    public const DEFAULT_MIN_QUERY_LENGTH = 2;
+
+    public static function minimumQueryLength(mixed $value): int
+    {
+        return (is_int($value) || (is_string($value) && ctype_digit($value)))
+            && (int) $value >= 1 && (int) $value <= 150 ? (int) $value : self::DEFAULT_MIN_QUERY_LENGTH;
+    }
+
+    public function isTooShort(int $minimum): bool
+    {
+        return $this->query !== '' && mb_strlen($this->query) < $minimum;
+    }
 
     public function __construct(
         public string $query,

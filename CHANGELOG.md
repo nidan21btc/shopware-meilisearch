@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.3
+
+- Add a configurable minimum search query length (1–150 characters, default 2),
+  with sales-channel inheritance and matching storefront/server enforcement.
+- Keep empty-query recommendations and show translated hints for shorter queries
+  in all five storefront languages, without executing a product search.
+- Wait 800 ms before displaying a short-query hint while retaining the 300 ms
+  search delay. Cancel pending hints when typing, clearing or closing the search.
+- Cover boundaries, Unicode normalization, shared/restored queries and timer
+  cancellation with PHP and Chromium/Firefox regression checks.
+
 ## 0.4.2
 
 - Size the initial search overlay to its content instead of a fixed height, so

@@ -48,6 +48,7 @@ workers, database and host memory before using it. See [security](security.md).
 | Backend label | Configuration key | Format and effect | Rebuild required? |
 | --- | --- | --- | --- |
 | Suchoverlay aktivieren | `enabled` | Boolean; disabled by default | Build before first enabling |
+| Mindestlänge für Suchanfragen | `minimumQueryLength` | Integer 1–150, default 2; inherited per sales channel | No |
 | Durchsuchbare Indexfelder | `indexFields` | Ordered list of searchable fields | Yes |
 | Abweichende Indexfelder je Sprache | `indexFieldsByLanguage` | Locale → field-list overrides | Yes |
 | Mengeneinheiten für die Suche | `quantityUnits` | Unit UUID → symbol and conversion factor | Yes |
@@ -112,6 +113,14 @@ language codes against configured Shopware languages. This is an administration
 form check; other configuration-writing paths must validate their own inputs. Index fields, locale
 overrides and unit mappings require a successful rebuild after saving. More
 synonyms are edited through the language-specific administration control.
+
+The minimum query length counts the complete trimmed query after NFC normalization.
+Empty queries still show discovery recommendations. Short nonempty queries show a
+translated hint without calling Meilisearch; the endpoint returns HTTP 200 without
+a popularity proof. The overlay also applies this rule to Enter, restored queries
+and shared links. While typing, the short-query hint waits for 800 ms without further input;
+searches above the threshold still start after 300 ms. Further input, clearing or
+closing cancels the pending timer. Submitting with Enter responds immediately.
 
 ## Searchable fields and language handling
 

@@ -40,6 +40,13 @@ class SearchController extends StorefrontController
         // Keep the exact matches first, but show their alternatives by default.
         $input = SearchInput::fromRequest($request, $context->getLanguageInfo()->localeCode === 'en-GB')
             ->withoutCategory($context->getSalesChannel()->getNavigationCategoryId());
+        $minimum = SearchInput::minimumQueryLength($this->config->get('ShopwareMeilisearch.config.minimumQueryLength', $context->getSalesChannelId()));
+        if ($input->isTooShort($minimum)) {
+            $response = $this->renderStorefront('@ShopwareMeilisearch/storefront/search/minimum-query.html.twig', ['minimumQueryLength' => $minimum]);
+            $response->headers->set('Cache-Control', 'private, no-store');
+            $response->headers->set('X-Robots-Tag', 'noindex, nofollow');
+            return $response;
+        }
         try {
             $result = $this->search->search($input, $context);
             $popular = Discovery::suggestions($this->config->getString('ShopwareMeilisearch.config.popularQueries', $context->getSalesChannelId()), $context->getLanguageInfo()->localeCode);
