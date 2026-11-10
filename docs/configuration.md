@@ -118,8 +118,9 @@ The minimum query length counts the complete trimmed query after NFC normalizati
 Empty queries still show discovery recommendations. Short nonempty queries show a
 translated hint without calling Meilisearch; the endpoint returns HTTP 200 without
 a popularity proof. The overlay also applies this rule to Enter, restored queries
-and shared links. While typing, both the short-query hint and searches wait for
-300 ms without further input; submitting with Enter still responds immediately.
+and shared links. While typing, the short-query hint waits for 800 ms without further input;
+searches above the threshold still start after 300 ms. Further input, clearing or
+closing cancels the pending timer. Submitting with Enter responds immediately.
 
 ## Searchable fields and language handling
 

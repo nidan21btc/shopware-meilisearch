@@ -274,6 +274,7 @@ if (dialog && typeof dialog.showModal === 'function') {
         load(1, displayedQuery !== null && query.value.trim() !== displayedQuery, false, shared);
     };
     const close = () => {
+        clearTimeout(timer);
         stopVoice();
         restoringFocus = true;
         dialog.close();
@@ -447,7 +448,8 @@ if (dialog && typeof dialog.showModal === 'function') {
         controller?.abort();
         ++revision;
         clearTimeout(timer);
-        timer = setTimeout(() => load(1, displayedQuery === null || query.value.trim() !== displayedQuery), 300);
+        const delay = tooShort(query.value) ? 800 : 300;
+        timer = setTimeout(() => load(1, displayedQuery === null || query.value.trim() !== displayedQuery), delay);
     });
     dialog.addEventListener('click', (event) => {
         if (event.target === dialog) {

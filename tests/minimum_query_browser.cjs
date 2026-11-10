@@ -16,12 +16,19 @@ const script=fs.readFileSync(path.join(__dirname,'../src/Resources/public/storef
    await p.clock.install({time:new Date('2030-01-01T00:00:00Z')});await p.clock.pauseAt(new Date('2030-01-01T00:00:01Z'));
    await input.fill(short);assert.notEqual(await p.locator('[data-el-status]').innerText(),hint,'no immediate hint');
    await p.clock.runFor(150);await input.fill(short.length>1?short.slice(0,-1):'b');
-   await p.clock.runFor(299);assert.notEqual(await p.locator('[data-el-status]').innerText(),hint,'typing restarts the hint delay');
-   await p.clock.runFor(1);assert.equal(await p.locator('[data-el-status]').innerText(),hint,'hint appears after 300 ms without input');
-   await p.clock.resume();assert.equal(requests.length,n);assert.equal(await p.locator('[data-el-status]').innerText(),hint);assert(await p.locator('[data-el-share]').isDisabled());await input.press('Enter');await p.waitForTimeout(50);assert.equal(requests.length,n);assert.equal(await p.locator('[data-el-network-error]').isVisible(),false)}
+   await p.clock.runFor(799);assert.notEqual(await p.locator('[data-el-status]').innerText(),hint,'typing restarts the 800 ms hint delay');
+   await p.clock.runFor(1);assert.equal(await p.locator('[data-el-status]').innerText(),hint,'hint appears after 800 ms without input');
+   assert.equal(requests.length,n);
+   const validResponse=p.waitForResponse(r=>new URL(r.url()).searchParams.get('q')===valid);
+   await input.fill(valid);await p.clock.runFor(299);assert.equal(requests.length,n,'search waits for 300 ms');
+   await p.clock.runFor(1);await validResponse;await idle();assert.equal(requests.length,n+1,'search still starts at 300 ms');
+   await input.fill(short);await p.clock.runFor(799);await p.locator('[data-el-clear]').evaluate(e=>e.click());await idle();await p.clock.runFor(1);assert.equal(await p.locator('[data-el-results]').innerText(),'Discovery','clearing cancels the pending hint');
+   await input.fill(short);await p.clock.runFor(799);await p.locator('[data-el-close]').evaluate(e=>e.click());await p.clock.runFor(20);assert.notEqual(await p.locator('[data-el-status]').innerText(),hint,'closing cancels the pending hint');
+   await p.locator('.search-toggle-btn').evaluate(e=>e.click());assert.equal(await p.locator('[data-el-status]').innerText(),hint);
+   await p.clock.resume();const beforeEnter=requests.length;assert(await p.locator('[data-el-share]').isDisabled());await input.press('Enter');await p.waitForTimeout(50);assert.equal(requests.length,beforeEnter);assert.equal(await p.locator('[data-el-network-error]').isVisible(),false)}
   await input.fill(valid);await p.waitForTimeout(400);await idle();assert.equal(requests.at(-1),valid);assert(!await p.locator('[data-el-share]').isDisabled());
   if(min===2){for(const q of ['Ö','O\u0308','😀']){const n=requests.length;await input.fill(q);await p.waitForTimeout(350);assert.equal(requests.length,n,'one Unicode codepoint after NFC must not search')}
-   await input.fill('Öl');await p.waitForTimeout(400);await idle();assert.equal(requests.at(-1),'Öl');await input.fill('Delayed');await p.waitForTimeout(340);await input.fill('x');await p.waitForTimeout(800);assert.equal(await p.locator('[data-el-results]').innerText(),hint);assert.equal(await p.locator('[data-el-results]').getAttribute('aria-busy'),'false');
+   await input.fill('Öl');await p.waitForTimeout(400);await idle();assert.equal(requests.at(-1),'Öl');await input.fill('Delayed');await p.waitForTimeout(340);await input.fill('x');await p.waitForTimeout(900);assert.equal(await p.locator('[data-el-results]').innerText(),hint);assert.equal(await p.locator('[data-el-results]').getAttribute('aria-busy'),'false');
   }
   await p.locator('[data-el-clear]').click();await p.waitForTimeout(50);await idle();assert.equal(requests.at(-1),'');assert.equal(await p.locator('[data-el-results]').innerText(),'Discovery');
   if(min>1){await input.fill(short);await p.locator('[data-el-close]').click();await p.waitForTimeout(20);await p.reload();const n=requests.length;await p.locator('.search-toggle-btn').click();await p.waitForTimeout(350);assert.equal(requests.length,n,'restored short query');assert.equal(await p.locator('[data-el-status]').innerText(),hint);
