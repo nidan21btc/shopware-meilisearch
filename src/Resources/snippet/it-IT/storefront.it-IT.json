@@ -3,6 +3,7 @@
     "search": "Cerca",
     "placeholder": "Cerca…",
     "close": "Chiudi",
+    "minimumQueryLength": "Inserisci almeno %count% caratteri.",
     "loading": "Ricerca in corso …",
     "unavailable": "La ricerca è temporaneamente non disponibile.",
     "retry": "Riprova",

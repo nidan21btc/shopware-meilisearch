@@ -33,6 +33,7 @@ After installing the isolated `.github/ci` dependencies, run `.github/ci/vendor/
 
 ```sh
 SHOPWARE_ROOT=/path/to/shopware php tests/run.php
+SHOPWARE_ROOT=/path/to/shopware php tests/minimum_query.php
 SHOPWARE_ROOT=/path/to/shopware php tests/search_guard.php
 SHOPWARE_ROOT=/path/to/shopware php tests/admission_metrics.php
 php tests/defaults.php
@@ -65,6 +66,13 @@ src/Resources/public/administration/js/shopware-meilisearch.js
 The admission metrics regression covers shared reason counters, timing/peak
 measurements, summary throttling, private files, nonblocking contention and
 logging failure isolation. It uses synthetic data and temporary files only.
+
+## Minimum query length
+
+Run `node tests/minimum_query_browser.cjs` for synthetic Chromium and Firefox
+checks at minimum lengths 1, 2, 3 and 150 on desktop and mobile. Checks include
+Enter, clearing, disabled sharing, restored and shared short queries, NFC/Unicode
+boundaries and delayed responses after deleting below the threshold.
 
 ## Credentialed-page browser regression
 

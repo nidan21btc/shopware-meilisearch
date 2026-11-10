@@ -33,6 +33,7 @@ jobs:
           SHOPWARE_ROOT: ${{ github.workspace }}/.github/ci
         run: |
           php tests/run.php
+          php tests/minimum_query.php
           php tests/search_guard.php
           php tests/admission_metrics.php
           php tests/defaults.php
@@ -56,6 +57,7 @@ jobs:
           PLAYWRIGHT_MODULE: ${{ runner.temp }}/browser/node_modules/playwright
           VUE_BROWSER_FILE: ${{ runner.temp }}/browser/node_modules/vue/dist/vue.global.prod.js
         run: |
+          node tests/minimum_query_browser.cjs
           node tests/credentialed_page_url_browser.cjs
           node tests/remember_query_browser.cjs
           node tests/admin_reindex_layout.cjs

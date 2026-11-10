@@ -3,6 +3,7 @@
     "search": "Search",
     "placeholder": "Search…",
     "close": "Close",
+    "minimumQueryLength": "Please enter at least %count% characters.",
     "loading": "Searching …",
     "unavailable": "Search is temporarily unavailable.",
     "retry": "Try again",
