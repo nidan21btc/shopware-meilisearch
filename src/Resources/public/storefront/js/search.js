@@ -447,7 +447,6 @@ if (dialog && typeof dialog.showModal === 'function') {
         controller?.abort();
         ++revision;
         clearTimeout(timer);
-        if (showMinimumHint(query.value)) return;
         timer = setTimeout(() => load(1, displayedQuery === null || query.value.trim() !== displayedQuery), 300);
     });
     dialog.addEventListener('click', (event) => {
